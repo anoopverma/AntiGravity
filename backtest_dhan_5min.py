@@ -1,11 +1,13 @@
+import os
 import time
 import logging
 import pandas as pd
 import numpy as np
-import yfinance as yf
+from datetime import datetime, timedelta
+from dotenv import load_dotenv
+from dhanhq import dhanhq, DhanContext
 from scipy.stats import norm
 from collections import deque
-from datetime import datetime, timedelta
 
 # Configure logging
 logging.basicConfig(
@@ -18,37 +20,26 @@ logger = logging.getLogger(__name__)
 RISK_FREE_RATE = 0.07  
 IMPLIED_VOL_ASSUMPTION = 0.15  
 
-class YF5MinGammaBacktester:
+class NiftyTuesdayDhanBacktester:
     def __init__(self):
-        self.symbol = "^NSEI" # Nifty 50 symbol on Yahoo Finance
-        self.gamma_window = deque(maxlen=20)
-        self.spike_threshold = 1.30  # Original Gamma Spike Threshold (30% above trailing avg)
-        self.results = []
+        load_dotenv()
+        self.client_id = os.getenv('DHAN_CLIENT_ID')
+        self.access_token = os.getenv('DHAN_ACCESS_TOKEN')
         
+        if not self.client_id or not self.access_token:
+            raise ValueError("Dhan API credentials not found in .env")
+            
+        self.dhan = dhanhq(DhanContext(self.client_id, self.access_token))
+        
+        # Strategy Parameters
         self.initial_capital = 500000
         self.current_capital = self.initial_capital
         self.margin_per_lot = 120000
         self.lot_size = 25
-
-    def get_past_tuesdays(self, df):
-        """Extract unique Tuesdays from Yahoo Finance dataframe index."""
-        df['Date'] = df.index.date
-        unique_days = df['Date'].unique()
-        tuesdays = []
-        for d in unique_days:
-            if d.weekday() == 1: # 1 is Tuesday
-                tuesdays.append(d)
-        return tuesdays
-
-    def approximate_gamma(self, spot_price, strike_price, time_to_expiry_years, iv):
-        """Estimate Gamma using Black-Scholes formula."""
-        if time_to_expiry_years <= 0 or spot_price <= 0 or iv <= 0:
-            return 0.0
-            
-        d1 = (np.log(spot_price / strike_price) + (RISK_FREE_RATE + 0.5 * iv**2) * time_to_expiry_years) / (iv * np.sqrt(time_to_expiry_years))
-        gamma = norm.pdf(d1) / (spot_price * iv * np.sqrt(time_to_expiry_years))
-        return gamma
-
+        self.stop_loss_pct = 0.30
+        self.target_pct = 1.00 # 100% Target
+        self.results = []
+        
     def estimate_option_price(self, spot_price, strike_price, time_to_expiry_years, iv, option_type):
         """Estimate Black Scholes price for options (simplified for PnL tracking)."""
         if time_to_expiry_years <= 0:
@@ -63,191 +54,215 @@ class YF5MinGammaBacktester:
             price = strike_price * np.exp(-RISK_FREE_RATE * time_to_expiry_years) * norm.cdf(-d2) - spot_price * norm.cdf(-d1)
         return max(0.01, price)
 
-    def run_backtest_60d(self):
-        """Run backtest on historical Nifty 50 5-minute data max available 60 days."""
-        logger.info(f"--- Starting YF 5-Min Native Expiry Backtest (Last 60 Days max) ---")
+    def get_last_two_tuesdays(self):
+        """Get the date strings for the last two Tuesdays."""
+        today = datetime.now()
+        # Find the most recent Tuesday
+        offset = (today.weekday() - 1) % 7
+        last_tuesday = today - timedelta(days=offset)
+        if today.weekday() < 1: # If it's earlier than Tuesday this week
+            last_tuesday = last_tuesday - timedelta(days=7)
         
-        ticker = yf.Ticker(self.symbol)
+        tuesdays = [
+            (last_tuesday - timedelta(days=7)).strftime("%Y-%m-%d"),
+            last_tuesday.strftime("%Y-%m-%d")
+        ]
+        return tuesdays
+
+    def fetch_dhan_5min_data(self, date_str, retries=3):
+        """Fetch 1-min intraday data and resample to 5-min."""
+        for attempt in range(retries):
+            try:
+                req = self.dhan.intraday_minute_data(
+                    security_id='13', # Nifty 50
+                    exchange_segment=self.dhan.INDEX,
+                    instrument_type='INDEX',
+                    from_date=date_str,
+                    to_date=date_str
+                )
+                
+                if req.get('status') == 'success' and req.get('data'):
+                    df = pd.DataFrame(req['data'])
+                    if df.empty:
+                        return pd.DataFrame()
+                        
+                    # Handle different versions of Dhan API response keys
+                    time_col = None
+                    if 'timestamp' in df.columns:
+                        time_col = 'timestamp'
+                    elif 'start_Time' in df.columns:
+                        time_col = 'start_Time'
+                    
+                    if time_col:
+                        if time_col == 'timestamp':
+                            df['datetime'] = pd.to_datetime(df[time_col], unit='s') + pd.Timedelta(hours=5, minutes=30)
+                        else:
+                            df['datetime'] = pd.to_datetime(df[time_col]) + pd.Timedelta(hours=5, minutes=30)
+                        
+                        # Set index
+                        df.set_index('datetime', inplace=True)
+                        
+                        df_5m = df.resample('5min').agg({
+                            'open': 'first',
+                            'high': 'max',
+                            'low': 'min',
+                            'close': 'last'
+                        }).dropna()
+                        
+                        logger.info(f"Fetched {len(df_5m)} 5-min bars for {date_str}. Range: {df_5m.index[0]} to {df_5m.index[-1]}")
+                        return df_5m
+                elif req.get('remarks') and 'DH-904' in str(req.get('remarks')):
+                    logger.warning(f"Rate limited on {date_str}. Waiting 5s (Attempt {attempt+1}/{retries})")
+                    time.sleep(5)
+                else:
+                    logger.warning(f"No Dhan data for {date_str} - {req.get('remarks')}")
+                    return pd.DataFrame()
+            except Exception as e:
+                logger.error(f"Dhan API Error on {date_str}: {e}")
+                time.sleep(5)
+        return pd.DataFrame()
+
+    def run_backtest(self):
+        """Run backtest for the last 2 Tuesdays."""
+        tuesdays = self.get_last_two_tuesdays()
+        logger.info(f"Starting 2-week Tuesday Backtest for: {tuesdays}")
         
-        logger.info(f"Requesting 5-minute data limit...")
-        try:
-            df_all = ticker.history(period="60d", interval="5m")
-            if df_all.empty:
-                logger.error("Failed to retrieve any 5m data.")
-                return
-        except Exception as e:
-            logger.error(f"Failed to fetch historical data: {e}")
-            return
-            
-        logger.info(f"Actually retrieved {len(df_all)} periods from {df_all.index[0].date()} to {df_all.index[-1].date()}")
-        
-        # Get all Tuesdays in that range
-        tuesdays = self.get_past_tuesdays(df_all)
-        
-        for current_date in tuesdays:
-            df = df_all[df_all['Date'] == current_date].copy()
+        for date_str in tuesdays:
+            df = self.fetch_dhan_5min_data(date_str)
             if df.empty:
                 continue
-                
-            self.gamma_window.clear()
+            
             in_position = False
-            total_daily_pnl = 0
-            
-            # End of trading day (15:30 IST)
-            end_of_day_time = df.index[-1].replace(hour=15, minute=30)
-            
+            entry_time = None
+            entry_spot = 0
             entry_ce_strike = 0
             entry_pe_strike = 0
-            entry_premium_paid = 0
+            entry_premium = 0
             entry_lots = 0
             peak_pnl = 0
             trough_pnl = 0
             
+            # End of day 3:30 PM
+            eod_time = df.index[-1].replace(hour=15, minute=30)
+            
             for index, row in df.iterrows():
-                spot_price = row['Close']
+                spot_price = row['close']
                 hour = index.hour
                 minute = index.minute
                 
-                if end_of_day_time < index:
-                    end_of_day_time = index
+                dte = (eod_time - index).total_seconds() / (365 * 24 * 3600)
                 
-                time_left = end_of_day_time - index
-                minutes_left = max(1, time_left.total_seconds() / 60)
-                dte = minutes_left / (365 * 24 * 60)
-                
-                # Approximate ATM Gamma
-                atm_strike = round(spot_price / 50) * 50
-                current_gamma = self.approximate_gamma(spot_price, atm_strike, dte, IMPLIED_VOL_ASSUMPTION)
-                
-                # Track PnL if in position
                 if in_position:
-                    current_ce_price = self.estimate_option_price(spot_price, entry_ce_strike, dte, IMPLIED_VOL_ASSUMPTION, 'C')
-                    current_pe_price = self.estimate_option_price(spot_price, entry_pe_strike, dte, IMPLIED_VOL_ASSUMPTION, 'P')
-                    current_strangle_value = current_ce_price + current_pe_price
+                    # Calculate current premium
+                    curr_ce = self.estimate_option_price(spot_price, entry_ce_strike, dte, IMPLIED_VOL_ASSUMPTION, 'C')
+                    curr_pe = self.estimate_option_price(spot_price, entry_pe_strike, dte, IMPLIED_VOL_ASSUMPTION, 'P')
+                    curr_premium = curr_ce + curr_pe
                     
-                    unrealized_pnl_points = entry_premium_paid - current_strangle_value # SHORT Strangle
-                    peak_pnl = max(peak_pnl, unrealized_pnl_points)
-                    trough_pnl = min(trough_pnl, unrealized_pnl_points)
+                    pnl_points = entry_premium - curr_premium # Short Strangle
+                    peak_pnl = max(peak_pnl, pnl_points)
+                    trough_pnl = min(trough_pnl, pnl_points)
                     
-                    # Exit near close (e.g. 15:15 5-min bar)
-                    if hour == 15 and minute >= 15:
-                        pnl_points = unrealized_pnl_points
-                        pnl_inr = pnl_points * self.lot_size * entry_lots
-                        self.current_capital += pnl_inr
-                        total_daily_pnl += pnl_points
-                        self.results.append({
-                            'Date': current_date.strftime("%Y-%m-%d"),
-                            'Entry_Time': entry_time.strftime("%H:%M"),
-                            'Exit_Time': index.strftime("%H:%M"),
-                            'Spot_Entry': round(entry_spot, 2),
-                            'Spot_Exit': round(spot_price, 2),
-                            'CE_Strike': entry_ce_strike,
-                            'PE_Strike': entry_pe_strike,
-                            'Max_Drawdown': round(trough_pnl, 2),
-                            'Peak_Profit': round(peak_pnl, 2),
-                            'PnL_Points': round(pnl_points, 2),
-                            'PnL_INR': round(pnl_inr, 2),
-                            'Capital': round(self.current_capital, 2),
-                            'Lots': entry_lots,
-                            'Win': pnl_points > 0,
-                            'Exit_Reason': 'Time'
-                        })
+                    # Check SL (30% of combined premium)
+                    if curr_premium >= entry_premium * (1 + self.stop_loss_pct):
+                        self.record_trade(date_str, entry_time, index, entry_spot, spot_price, entry_ce_strike, entry_pe_strike, pnl_points, entry_lots, peak_pnl, trough_pnl, 'StopLoss')
                         in_position = False
-                        continue
+                        break
+                    
+                    # Check Target (100% of premium - basically premium goes to 0 or very low)
+                    # For a short strangle, 100% target means we collect the full premium.
+                    if curr_premium <= entry_premium * (1 - self.target_pct):
+                        self.record_trade(date_str, entry_time, index, entry_spot, spot_price, entry_ce_strike, entry_pe_strike, pnl_points, entry_lots, peak_pnl, trough_pnl, 'Target')
+                        in_position = False
+                        break
+                        
+                    # Exit at EOD
+                    if hour == 15 and minute >= 15:
+                        self.record_trade(date_str, entry_time, index, entry_spot, spot_price, entry_ce_strike, entry_pe_strike, pnl_points, entry_lots, peak_pnl, trough_pnl, 'Time')
+                        in_position = False
+                        break
                 
-                # Strategy logic - Original Gamma Spike Detection (Long Straddle / Short Strangle after 1:00 PM)
-                if current_gamma > 0 and not in_position and hour >= 13:
-                    if len(self.gamma_window) >= 10: # Wait for trailing base window to fill
-                        baseline_gamma = sum(self.gamma_window) / len(self.gamma_window)
-                        if baseline_gamma > 0:
-                            spike_ratio = current_gamma / baseline_gamma
-                            
-                            # If spike is > 30% over baseline, enter the trade!
-                            if spike_ratio >= self.spike_threshold and hour < 15:
-                                logger.info(f"[{current_date} {index.strftime('%H:%M')}] GAMMA SPIKE! Ratio {spike_ratio:.2f}")
-                                in_position = True
-                                entry_spot = spot_price
-                                entry_time = index
-                                entry_lots = max(1, int(self.current_capital // self.margin_per_lot))
-                                
-                                # Long Straddle (Gamma Explosion betting) requires changing margin/short logic
-                                # For consistency with user's earlier rule change, we enter Short Strangle on Spikes:
-                                entry_ce_strike = atm_strike + 100
-                                entry_pe_strike = atm_strike - 100
-                                
-                                ce_price = self.estimate_option_price(spot_price, entry_ce_strike, dte, IMPLIED_VOL_ASSUMPTION, 'C')
-                                pe_price = self.estimate_option_price(spot_price, entry_pe_strike, dte, IMPLIED_VOL_ASSUMPTION, 'P')
-                                entry_premium_paid = ce_price + pe_price
-                                
-                                peak_pnl = 0
-                                trough_pnl = 0
-
-                if current_gamma > 0:
-                    self.gamma_window.append(current_gamma)
-
+                # Entry after 1:30 PM
+                if not in_position and hour == 13 and minute >= 30:
+                    # Log once when we cross 1:30 PM
+                    if not hasattr(self, '_logged_entry_check'):
+                        self._logged_entry_check = set()
+                    if date_str not in self._logged_entry_check:
+                        logger.info(f"Entry check triggered at {index} for {date_str}")
+                        self._logged_entry_check.add(date_str)
+                        
+                    in_position = True
+                    entry_time = index
+                    entry_spot = spot_price
+                    entry_lots = max(1, int(self.current_capital // self.margin_per_lot))
+                    
+                    atm_strike = round(spot_price / 50) * 50
+                    entry_ce_strike = atm_strike + 100
+                    entry_pe_strike = atm_strike - 100
+                    
+                    ce_p = self.estimate_option_price(spot_price, entry_ce_strike, dte, IMPLIED_VOL_ASSUMPTION, 'C')
+                    pe_p = self.estimate_option_price(spot_price, entry_pe_strike, dte, IMPLIED_VOL_ASSUMPTION, 'P')
+                    entry_premium = ce_p + pe_p
+                    peak_pnl = 0
+                    trough_pnl = 0
+                    logger.info(f"Trade Entered on {date_str} at {index.time()} | Spot: {entry_spot} | Lot: {entry_lots}")
+                    
+            time.sleep(1)
+        
         self.print_statistics()
 
+    def record_trade(self, date_str, entry_time, exit_time, entry_spot, exit_spot, ce_strike, pe_strike, pnl_points, lots, peak, trough, reason):
+        pnl_inr = pnl_points * self.lot_size * lots
+        self.current_capital += pnl_inr
+        self.results.append({
+            'Date': date_str,
+            'Entry': entry_time.strftime("%H:%M"),
+            'Exit': exit_time.strftime("%H:%M"),
+            'Spot_Entry': round(entry_spot, 2),
+            'Spot_Exit': round(exit_spot, 2),
+            'Strikes': f"{ce_strike}/{pe_strike}",
+            'PnL_Points': round(pnl_points, 2),
+            'PnL_INR': round(pnl_inr, 2),
+            'Capital': round(self.current_capital, 2),
+            'Lots': lots,
+            'Reason': reason,
+            'Win': pnl_points > 0
+        })
+        logger.info(f"Trade Exited on {date_str} at {exit_time.time()} | Reason: {reason} | PnL: {pnl_inr:.2f}")
+
     def print_statistics(self):
-        """Calculate and print tabular statistics."""
         if not self.results:
-            logger.info("No trades were executed during the backtest period.")
+            logger.info("No trades executed.")
             return
             
         df = pd.DataFrame(self.results)
-        
-        total_trades = len(df)
-        wins = df['Win'].sum()
-        losses = total_trades - wins
-        accuracy = (wins / total_trades) * 100
-        
-        total_pnl_points = df['PnL_Points'].sum()
-        total_profit_inr = df['PnL_INR'].sum()
-        
-        max_drawdown = df['Max_Drawdown'].min() * self.lot_size 
-        max_profit = df['Peak_Profit'].max() * self.lot_size
-        avg_pnl_inr = df['PnL_INR'].mean()
-        
-        roi = ((self.current_capital - self.initial_capital) / self.initial_capital) * 100
+        total_pnl = df['PnL_INR'].sum()
+        roi = (total_pnl / self.initial_capital) * 100
         
         md = f"""
-### 📊 Yahoo Finance 5-Min Backtest (Nifty Tuesday Expiries, >1:00 PM, Gamma Spike Strategy, No SL)
+### 📊 Nifty Tuesday Expiry Backtest (Last 2 Weeks, Dhan API)
 
 | Metric | Value |
 |--------|-------|
-| **Strategy** | Short Strangle (Spot +/- 100) on 30% Gamma Explosion |
 | **Initial Capital** | ₹{self.initial_capital:,.2f} |
 | **Final Capital** | ₹{self.current_capital:,.2f} |
-| **Overall ROI** | {roi:.2f}% |
-| **Total Trades Taken** | {total_trades} |
-| **Wins / Losses** | {wins} / {losses} |
-| **Accuracy** | {accuracy:.2f}% |
-| **Overall Net Profit (INR)** | ₹{total_profit_inr:,.2f} |
-| **Total Net Points** | {total_pnl_points:.2f} pts |
-| **Average Trade PnL (INR)** | ₹{avg_pnl_inr:,.2f} |
-| **Max Drawdown inside a trade (INR per Lot)** | ₹{max_drawdown:,.2f} |
+| **Total ROI** | {roi:.2f}% |
+| **Total Trades** | {len(df)} |
+| **Accuracy** | {(df['Win'].sum() / len(df)) * 100:.2f}% |
 
 <br/>
 
 ### 📝 Trade Log
-| Date | Entry | Exit | Spot Entry | Spot Exit | Exit Reason | Strikes (CE/PE) | Lots | Net PnL (INR) | Capital |
-|------|-------|------|-------------|------------|-------------|-----------------|------|---------------|---------|
+| Date | Entry | Exit | Spot Entry | Spot Exit | Strikes | PnL (INR) | Reason |
+|------|-------|------|------------|-----------|---------|-----------|--------|
 """
         for _, row in df.iterrows():
-            md += f"| {row['Date']} | {row['Entry_Time']} | {row['Exit_Time']} | {row['Spot_Entry']} | {row['Spot_Exit']} | {row['Exit_Reason']} | {row['CE_Strike']} / {row['PE_Strike']} | {row['Lots']} | **₹{row['PnL_INR']:,.2f}** | ₹{row['Capital']:,.2f} |\n"
-            
-        # Write to markdown file so we can show it to user
+            md += f"| {row['Date']} | {row['Entry']} | {row['Exit']} | {row['Spot_Entry']} | {row['Spot_Exit']} | {row['Strikes']} | **₹{row['PnL_INR']:,.2f}** | {row['Reason']} |\n"
+        
         with open("/Users/anoop/.gemini/antigravity/brain/311c7cff-5d0e-40ca-b43a-de26854c129a/walkthrough.md", "a") as f:
             f.write("\n\n---\n\n" + md)
             
         print(md)
 
-def main():
-    logger.info("Starting Yahoo Finance 5-Min Gamma Backtester...")
-    try:
-        backtester = YF5MinGammaBacktester()
-        backtester.run_backtest_60d()
-    except Exception as e:
-        logger.error(f"Fatal Error: {e}")
-
 if __name__ == "__main__":
-    main()
+    backtester = NiftyTuesdayDhanBacktester()
+    backtester.run_backtest()
