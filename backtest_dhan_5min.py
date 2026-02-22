@@ -254,6 +254,105 @@ class NiftyTuesdayDhanBacktester:
             time.sleep(0.1)
         return self.get_summary_buy_optimized(jump_trigger, stop_loss_pct, target_pct)
 
+    def run_directional_buy_backtest(self, stop_loss_pct=0.30, target_pct=1.00, silent=False):
+        """Run directional buy backtest based on 1:30 PM movement."""
+        tuesdays = self.get_last_n_tuesdays(12)
+        if not silent:
+            logger.info("Starting 12-week Tuesday DIRECTIONAL BUY Backtest")
+        
+        self.results = []
+        self.current_capital = self.initial_capital
+        
+        for date_str in tuesdays:
+            df = self.cached_data.get(date_str) or self.fetch_dhan_5min_data(date_str)
+            self.cached_data[date_str] = df
+            if df.empty: continue
+            
+            baseline_spot = None
+            straddle_baseline = None
+            in_position = False
+            entry_time, entry_spot, entry_strike, entry_premium, entry_qty = None, 0, 0, 0, 0
+            peak_pnl, trough_pnl = 0, 0
+            eod_time = df.index[-1].replace(hour=15, minute=30)
+            
+            for index, row in df.iterrows():
+                spot_price = row['close']
+                dte = (eod_time - index).total_seconds() / (365 * 24 * 3600)
+                
+                # Setup Baseline at 1:30 PM
+                if index.hour == 13 and index.minute == 30:
+                    baseline_spot = spot_price
+                    atm_strike = round(spot_price / 50) * 50
+                    straddle_baseline = self.estimate_option_price(spot_price, atm_strike, dte, IMPLIED_VOL_ASSUMPTION, 'C') + \
+                                       self.estimate_option_price(spot_price, atm_strike, dte, IMPLIED_VOL_ASSUMPTION, 'P')
+                    if not silent: logger.info(f"1:30 PM Baseline - Spot: {baseline_spot}, Straddle: {straddle_baseline:.2f}")
+
+                if in_position:
+                    # Current price of the single directional option
+                    option_type = 'C' if entry_strike > entry_spot else 'P' # Simplified for logging strike
+                    # Re-derive type based on strike relationship is risky if non-standard. 
+                    # Let's just track the 'type' in state.
+                    curr_p = self.estimate_option_price(spot_price, entry_strike, dte, IMPLIED_VOL_ASSUMPTION, entry_type)
+                    pnl_points = curr_p - entry_premium
+                    peak_pnl, trough_pnl = max(peak_pnl, pnl_points), min(trough_pnl, pnl_points)
+                    
+                    if stop_loss_pct and curr_p <= entry_premium * (1 - stop_loss_pct):
+                        self.record_trade(date_str, entry_time, index, entry_spot, spot_price, entry_strike, 0, pnl_points, entry_qty // self.lot_size, peak_pnl, trough_pnl, 'StopLoss', entry_premium, curr_p, silent)
+                        in_position = False; break
+                    if target_pct and curr_p >= entry_premium * (1 + target_pct):
+                        self.record_trade(date_str, entry_time, index, entry_spot, spot_price, entry_strike, 0, pnl_points, entry_qty // self.lot_size, peak_pnl, trough_pnl, 'Target', entry_premium, curr_p, silent)
+                        in_position = False; break
+                    if index.hour == 15 and index.minute >= 15:
+                        self.record_trade(date_str, entry_time, index, entry_spot, spot_price, entry_strike, 0, pnl_points, entry_qty // self.lot_size, peak_pnl, trough_pnl, 'Time', entry_premium, curr_p, silent)
+                        in_position = False; break
+
+                elif baseline_spot and index.time() > datetime.strptime("13:30", "%H:%M").time():
+                    # Directional Logic
+                    direction = 'UP' if spot_price > baseline_spot else 'DOWN'
+                    
+                    # Current Straddle at 1:30 PM ATM strikes
+                    # (Breakout of the volatility recorded at 1:30 PM)
+                    atm_strike_130 = round(baseline_spot / 50) * 50
+                    curr_straddle = self.estimate_option_price(spot_price, atm_strike_130, dte, IMPLIED_VOL_ASSUMPTION, 'C') + \
+                                    self.estimate_option_price(spot_price, atm_strike_130, dte, IMPLIED_VOL_ASSUMPTION, 'P')
+                    
+                    # Entry Condition: Current Straddle > 1:30 PM Straddle (Volatility Expansion)
+                    if curr_straddle > straddle_baseline:
+                        opt_type = 'C' if direction == 'UP' else 'P'
+                        
+                        # Selection: Find first strike > 9 rupees
+                        target_strike = None
+                        target_price = 0
+                        step = 50
+                        base = round(spot_price / 50) * 50
+                        
+                        if direction == 'UP':
+                            for s in range(base, base + 500, step):
+                                p = self.estimate_option_price(spot_price, s, dte, IMPLIED_VOL_ASSUMPTION, 'C')
+                                if p > 9:
+                                    target_strike, target_price = s, p; break
+                        else:
+                            for s in range(base, base - 500, -step):
+                                p = self.estimate_option_price(spot_price, s, dte, IMPLIED_VOL_ASSUMPTION, 'P')
+                                if p > 9:
+                                    target_strike, target_price = s, p; break
+                        
+                        if target_strike:
+                            in_position = True
+                            entry_time, entry_spot, entry_strike, entry_premium, entry_type = index, spot_price, target_strike, target_price, opt_type
+                            entry_qty = max(self.lot_size, int(self.current_capital // (entry_premium * self.lot_size)) * self.lot_size)
+                            if not silent: logger.info(f"Straddle Breakout! {direction} Buy: Strike {entry_strike} @ {entry_premium:.2f} (Straddle: {curr_straddle:.2f} > {straddle_baseline:.2f})")
+            
+            time.sleep(0.1)
+        return self.get_summary_directional()
+
+    def get_summary_directional(self):
+        if not self.results: return None
+        df = pd.DataFrame(self.results)
+        pnl = df['PnL_INR'].sum()
+        roi = (pnl / self.initial_capital) * 100
+        return {'ROI%': round(roi, 2), 'PnL': round(pnl, 2), 'Accuracy%': round((df['Win'].sum()/len(df))*100, 2), 'Trades': len(df)}
+
     def get_summary_sell(self, sl, tgt):
         if not self.results: return None
         df = pd.DataFrame(self.results)
@@ -352,6 +451,17 @@ class NiftyTuesdayDhanBacktester:
         print(f"Total ROI: {roi:.2f}% | Accuracy: {(df['Win'].sum()/len(df))*100:.2f}%")
         print(df[['Date', 'Entry_Price', 'Exit_Price', 'PnL_INR', 'Profit%', 'Reason']].to_string(index=False))
 
+    def print_statistics_directional(self):
+        if not self.results:
+            print("\n--- DIRECTIONAL BUY STRATEGY: No Trades Triggered ---")
+            return
+        df = pd.DataFrame(self.results)
+        df['Profit%'] = (df['PnL_Points'] / df['Entry_Price']) * 100
+        roi = (df['PnL_INR'].sum() / self.initial_capital) * 100
+        print(f"\n--- DIRECTIONAL BUY STRATEGY RESULTS ---")
+        print(f"Total ROI: {roi:.2f}% | Accuracy: {(df['Win'].sum()/len(df))*100:.2f}%")
+        print(df[['Date', 'Entry_Price', 'Exit_Price', 'PnL_INR', 'Profit%', 'Reason']].to_string(index=False))
+
     def print_statistics_buy(self, trigger=0.40):
         if not self.results: return
         df = pd.DataFrame(self.results)
@@ -364,14 +474,18 @@ if __name__ == "__main__":
     backtester = NiftyTuesdayDhanBacktester()
     
     print("\n=== Nifty Tuesday Expiry Strategy Selection ===")
-    print("1. Optimal SELLING Strategy (Default: 75% Target, No SL)")
-    print("2. Momentum BUYING Strategy (Def: 40% Jump, EOD Exit)")
+    print("1. Optimal SELLING Strategy (75% Target)")
+    print("2. DIRECTIONAL BUY Strategy (₹9 Floor + Straddle Breakout)")
+    print("3. Momentum BUYING Strategy (40% Jump)")
     
-    choice = "1" # Set your choice here
+    choice = "2" # Running the new strategy requested by user
     
     if choice == "1":
         backtester.run_sell_backtest(stop_loss_pct=None, target_pct=0.75)
         backtester.print_statistics_sell(sl=None, tgt=0.75)
+    elif choice == "2":
+        backtester.run_directional_buy_backtest(stop_loss_pct=0.30, target_pct=1.00)
+        backtester.print_statistics_directional()
     else:
         backtester.run_buy_backtest(jump_trigger=0.40)
         backtester.print_statistics_buy(trigger=0.40)
