@@ -23,6 +23,11 @@ class StrangleBacktester1Yr:
         self.symbol = "^NSEI" # Nifty 50 symbol on Yahoo Finance
         self.gamma_window = deque(maxlen=20)
         self.spike_threshold = 1.1  # Lowered for hourly data (10% spike vs 30% for 1m data)
+        self.initial_capital = 500000
+        self.current_capital = self.initial_capital
+        self.margin_per_lot = 120000
+        self.lot_size = 25
+        self.stop_loss_pct = 0.30
         self.results = []
         
     def get_past_tuesdays_1yr(self):
@@ -132,21 +137,22 @@ class StrangleBacktester1Yr:
                 atm_strike = round(spot_price / 50) * 50
                 current_gamma = self.approximate_gamma(spot_price, atm_strike, dte, IMPLIED_VOL_ASSUMPTION)
                 
-                # Track PnL if in position
                 if in_position:
                     # Current Strangle Price
                     current_ce_price = self.estimate_option_price(spot_price, entry_ce_strike, dte, IMPLIED_VOL_ASSUMPTION, 'C')
                     current_pe_price = self.estimate_option_price(spot_price, entry_pe_strike, dte, IMPLIED_VOL_ASSUMPTION, 'P')
                     current_strangle_value = current_ce_price + current_pe_price
                     
-                    unrealized_pnl = entry_premium_paid - current_strangle_value # SHORT Strangle
-                    peak_pnl = max(peak_pnl, unrealized_pnl)
-                    trough_pnl = min(trough_pnl, unrealized_pnl)
+                    unrealized_pnl_points = entry_premium_paid - current_strangle_value # SHORT Strangle
+                    peak_pnl = max(peak_pnl, unrealized_pnl_points)
+                    trough_pnl = min(trough_pnl, unrealized_pnl_points)
                     
-                    # Exit near close (e.g. at the 14:15 or 15:15 hourly bar)
-                    if hour >= 14:
-                        pnl = unrealized_pnl
-                        total_daily_pnl += pnl
+                    # Check 30% Stoploss
+                    if current_strangle_value >= entry_premium_paid * (1 + self.stop_loss_pct):
+                        pnl_points = unrealized_pnl_points
+                        pnl_inr = pnl_points * self.lot_size * entry_lots
+                        self.current_capital += pnl_inr
+                        total_daily_pnl += pnl_points
                         self.results.append({
                             'Date': current_date.strftime("%Y-%m-%d"),
                             'Entry_Time': entry_time.strftime("%H:%M"),
@@ -157,8 +163,38 @@ class StrangleBacktester1Yr:
                             'PE_Strike': entry_pe_strike,
                             'Max_Drawdown': round(trough_pnl, 2),
                             'Peak_Profit': round(peak_pnl, 2),
-                            'PnL_Points': round(pnl, 2),
-                            'Win': pnl > 0
+                            'PnL_Points': round(pnl_points, 2),
+                            'PnL_INR': round(pnl_inr, 2),
+                            'Capital': round(self.current_capital, 2),
+                            'Lots': entry_lots,
+                            'Win': False,
+                            'Exit_Reason': 'StopLoss'
+                        })
+                        in_position = False
+                        continue
+                    
+                    # Exit near close (e.g. at the 14:15 or 15:15 hourly bar)
+                    if hour >= 14:
+                        pnl_points = unrealized_pnl_points
+                        pnl_inr = pnl_points * self.lot_size * entry_lots
+                        self.current_capital += pnl_inr
+                        total_daily_pnl += pnl_points
+                        self.results.append({
+                            'Date': current_date.strftime("%Y-%m-%d"),
+                            'Entry_Time': entry_time.strftime("%H:%M"),
+                            'Exit_Time': index.strftime("%H:%M"),
+                            'Spot_Entry': round(entry_spot, 2),
+                            'Spot_Exit': round(spot_price, 2),
+                            'CE_Strike': entry_ce_strike,
+                            'PE_Strike': entry_pe_strike,
+                            'Max_Drawdown': round(trough_pnl, 2),
+                            'Peak_Profit': round(peak_pnl, 2),
+                            'PnL_Points': round(pnl_points, 2),
+                            'PnL_INR': round(pnl_inr, 2),
+                            'Capital': round(self.current_capital, 2),
+                            'Lots': entry_lots,
+                            'Win': pnl_points > 0,
+                            'Exit_Reason': 'Time'
                         })
                         in_position = False
                         continue
@@ -169,11 +205,12 @@ class StrangleBacktester1Yr:
                     # As soon as we pass market time 13:30, we enter.
                     time_passed = hour > 13 or (hour == 13 and minute >= 30)
                     if time_passed:
-                        # Enter Long Strangle (Spot+100 CE, Spot-100 PE)
+                        # Enter Short Strangle (Spot+100 CE, Spot-100 PE)
                         in_position = True
                         trades_today += 1
                         entry_spot = spot_price
                         entry_time = index
+                        entry_lots = max(1, int(self.current_capital // self.margin_per_lot))
                         
                         entry_ce_strike = atm_strike + 100
                         entry_pe_strike = atm_strike - 100
@@ -204,36 +241,38 @@ class StrangleBacktester1Yr:
         accuracy = (wins / total_trades) * 100
         
         total_pnl_points = df['PnL_Points'].sum()
-        # Nifty lot size is 25
-        lot_size = 25
-        total_profit_inr = total_pnl_points * lot_size
+        total_profit_inr = df['PnL_INR'].sum()
         
-        max_drawdown = df['Max_Drawdown'].min() * lot_size
-        max_profit = df['Peak_Profit'].max() * lot_size
-        avg_pnl = df['PnL_Points'].mean() * lot_size
+        max_drawdown = df['Max_Drawdown'].min() * self.lot_size # Simplified, per lot
+        max_profit = df['Peak_Profit'].max() * self.lot_size
+        avg_pnl_inr = df['PnL_INR'].mean()
+        
+        roi = ((self.current_capital - self.initial_capital) / self.initial_capital) * 100
         
         md = f"""
-### 📊 Backtest Performance Statistics (Tuesdays, >1:30 PM, Strangle)
+### 📊 Backtest Performance Statistics (Tuesdays, >1:30 PM, Short Strangle, 30% SL)
 
 | Metric | Value |
 |--------|-------|
+| **Initial Capital** | ₹{self.initial_capital:,.2f} |
+| **Final Capital** | ₹{self.current_capital:,.2f} |
+| **Overall ROI** | {roi:.2f}% |
 | **Total Trades** | {total_trades} |
 | **Wins / Losses** | {wins} / {losses} |
 | **Accuracy** | {accuracy:.2f}% |
-| **Overall Net Profit (INR @ 1 Lot)** | ₹{total_profit_inr:,.2f} |
+| **Overall Net Profit (INR)** | ₹{total_profit_inr:,.2f} |
 | **Total Net Points** | {total_pnl_points:.2f} pts |
-| **Average Trade PnL (INR)** | ₹{avg_pnl:,.2f} |
-| **Max Drawdown inside a trade (INR)** | ₹{max_drawdown:,.2f} |
-| **Highest Peak Profit inside a trade (INR)** | ₹{max_profit:,.2f} |
+| **Average Trade PnL (INR)** | ₹{avg_pnl_inr:,.2f} |
+| **Max Drawdown inside a trade (INR per Lot)** | ₹{max_drawdown:,.2f} |
 
 <br/>
 
 ### 📝 Trade Log
-| Date | Entry time | Exit time | Spot Entry | Spot Exit | Strikes (CE/PE) | Max Drawdown (pts) | Net PnL (pts) |
-|------|------------|-----------|-------------|------------|-----------------|---------------------|---------------|
+| Date | Entry | Exit | Spot Entry | Spot Exit | Exit Reason | Strikes (CE/PE) | Lots | Net PnL (INR) | Capital |
+|------|-------|------|-------------|------------|-------------|-----------------|------|---------------|---------|
 """
         for _, row in df.iterrows():
-            md += f"| {row['Date']} | {row['Entry_Time']} | {row['Exit_Time']} | {row['Spot_Entry']} | {row['Spot_Exit']} | {row['CE_Strike']} / {row['PE_Strike']} | {row['Max_Drawdown']} | **{row['PnL_Points']}** |\n"
+            md += f"| {row['Date']} | {row['Entry_Time']} | {row['Exit_Time']} | {row['Spot_Entry']} | {row['Spot_Exit']} | {row['Exit_Reason']} | {row['CE_Strike']} / {row['PE_Strike']} | {row['Lots']} | **₹{row['PnL_INR']:,.2f}** | ₹{row['Capital']:,.2f} |\n"
             
         # Write to markdown file so we can show it to user
         with open("/Users/anoop/.gemini/antigravity/brain/311c7cff-5d0e-40ca-b43a-de26854c129a/walkthrough.md", "a") as f:
