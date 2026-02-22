@@ -36,9 +36,8 @@ class NiftyTuesdayDhanBacktester:
         self.current_capital = self.initial_capital
         self.margin_per_lot = 120000
         self.lot_size = 25
-        self.stop_loss_pct = 0.30
-        self.target_pct = 1.00 # 100% Target
         self.results = []
+        self.cached_data = {} # Cache fetched data to avoid redundant API calls
         
     def estimate_option_price(self, spot_price, strike_price, time_to_expiry_years, iv, option_type):
         """Estimate Black Scholes price for options (simplified for PnL tracking)."""
@@ -54,8 +53,8 @@ class NiftyTuesdayDhanBacktester:
             price = strike_price * np.exp(-RISK_FREE_RATE * time_to_expiry_years) * norm.cdf(-d2) - spot_price * norm.cdf(-d1)
         return max(0.01, price)
 
-    def get_last_two_tuesdays(self):
-        """Get the date strings for the last two Tuesdays."""
+    def get_last_n_tuesdays(self, n=12):
+        """Get the date strings for the last N Tuesdays."""
         today = datetime.now()
         # Find the most recent Tuesday
         offset = (today.weekday() - 1) % 7
@@ -63,11 +62,29 @@ class NiftyTuesdayDhanBacktester:
         if today.weekday() < 1: # If it's earlier than Tuesday this week
             last_tuesday = last_tuesday - timedelta(days=7)
         
-        tuesdays = [
-            (last_tuesday - timedelta(days=7)).strftime("%Y-%m-%d"),
-            last_tuesday.strftime("%Y-%m-%d")
-        ]
-        return tuesdays
+        tuesdays = []
+        for i in range(n):
+            tuesdays.append((last_tuesday - timedelta(days=7*i)).strftime("%Y-%m-%d"))
+        
+        return sorted(tuesdays)
+
+    def fetch_yf_5min_fallback(self, date_str):
+        """Fetch 5-min data from YFinance for a specific date."""
+        try:
+            ticker = yf.Ticker("^NSEI")
+            # YF only allows 5m data for the last 60 days. 
+            # If date_str is older, this might fail or return empty.
+            start_date = date_str
+            end_date = (datetime.strptime(date_str, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
+            df = ticker.history(start=start_date, end=end_date, interval="5m")
+            if not df.empty:
+                df.columns = [c.lower() for c in df.columns]
+                # Ensure index is datetime and handled correctly
+                logger.info(f"Fallback: Fetched {len(df)} 5-min bars from YFinance for {date_str}")
+                return df
+        except Exception as e:
+            logger.error(f"YFinance fallback failed for {date_str}: {e}")
+        return pd.DataFrame()
 
     def fetch_dhan_5min_data(self, date_str, retries=3):
         """Fetch 1-min intraday data and resample to 5-min."""
@@ -115,20 +132,31 @@ class NiftyTuesdayDhanBacktester:
                     logger.warning(f"Rate limited on {date_str}. Waiting 5s (Attempt {attempt+1}/{retries})")
                     time.sleep(5)
                 else:
-                    logger.warning(f"No Dhan data for {date_str} - {req.get('remarks')}")
-                    return pd.DataFrame()
+                    logger.warning(f"No Dhan data for {date_str} - {req.get('remarks')}. Trying fallback...")
+                    break
             except Exception as e:
-                logger.error(f"Dhan API Error on {date_str}: {e}")
-                time.sleep(5)
-        return pd.DataFrame()
+                logger.error(f"Dhan API Error on {date_str}: {e}. Trying fallback...")
+                break
+        
+        # If Dhan failed, try YF
+        return self.fetch_yf_5min_fallback(date_str)
 
-    def run_backtest(self):
-        """Run backtest for the last 2 Tuesdays."""
-        tuesdays = self.get_last_two_tuesdays()
-        logger.info(f"Starting 2-week Tuesday Backtest for: {tuesdays}")
+    def run_backtest(self, stop_loss_pct=None, target_pct=0.75, silent=False):
+        """Run backtest for the last 12 Tuesdays with specific SL and Target."""
+        tuesdays = self.get_last_n_tuesdays(12)
+        if not silent:
+            logger.info(f"Starting 12-week Tuesday Backtest (SL: {stop_loss_pct*100 if stop_loss_pct else 'None'}%, TGT: {target_pct*100}%)")
+        
+        self.results = []
+        self.current_capital = self.initial_capital
         
         for date_str in tuesdays:
-            df = self.fetch_dhan_5min_data(date_str)
+            if date_str in self.cached_data:
+                df = self.cached_data[date_str]
+            else:
+                df = self.fetch_dhan_5min_data(date_str)
+                self.cached_data[date_str] = df
+                
             if df.empty:
                 continue
             
@@ -162,34 +190,26 @@ class NiftyTuesdayDhanBacktester:
                     peak_pnl = max(peak_pnl, pnl_points)
                     trough_pnl = min(trough_pnl, pnl_points)
                     
-                    # Check SL (30% of combined premium)
-                    if curr_premium >= entry_premium * (1 + self.stop_loss_pct):
-                        self.record_trade(date_str, entry_time, index, entry_spot, spot_price, entry_ce_strike, entry_pe_strike, pnl_points, entry_lots, peak_pnl, trough_pnl, 'StopLoss')
+                    # Check SL
+                    if stop_loss_pct is not None and curr_premium >= entry_premium * (1 + stop_loss_pct):
+                        self.record_trade(date_str, entry_time, index, entry_spot, spot_price, entry_ce_strike, entry_pe_strike, pnl_points, entry_lots, peak_pnl, trough_pnl, 'StopLoss', silent)
                         in_position = False
                         break
                     
-                    # Check Target (100% of premium - basically premium goes to 0 or very low)
-                    # For a short strangle, 100% target means we collect the full premium.
-                    if curr_premium <= entry_premium * (1 - self.target_pct):
-                        self.record_trade(date_str, entry_time, index, entry_spot, spot_price, entry_ce_strike, entry_pe_strike, pnl_points, entry_lots, peak_pnl, trough_pnl, 'Target')
+                    # Check Target
+                    if curr_premium <= entry_premium * (1 - target_pct):
+                        self.record_trade(date_str, entry_time, index, entry_spot, spot_price, entry_ce_strike, entry_pe_strike, pnl_points, entry_lots, peak_pnl, trough_pnl, 'Target', silent)
                         in_position = False
                         break
                         
                     # Exit at EOD
                     if hour == 15 and minute >= 15:
-                        self.record_trade(date_str, entry_time, index, entry_spot, spot_price, entry_ce_strike, entry_pe_strike, pnl_points, entry_lots, peak_pnl, trough_pnl, 'Time')
+                        self.record_trade(date_str, entry_time, index, entry_spot, spot_price, entry_ce_strike, entry_pe_strike, pnl_points, entry_lots, peak_pnl, trough_pnl, 'Time', silent)
                         in_position = False
                         break
                 
                 # Entry after 1:30 PM
                 if not in_position and hour == 13 and minute >= 30:
-                    # Log once when we cross 1:30 PM
-                    if not hasattr(self, '_logged_entry_check'):
-                        self._logged_entry_check = set()
-                    if date_str not in self._logged_entry_check:
-                        logger.info(f"Entry check triggered at {index} for {date_str}")
-                        self._logged_entry_check.add(date_str)
-                        
                     in_position = True
                     entry_time = index
                     entry_spot = spot_price
@@ -204,13 +224,14 @@ class NiftyTuesdayDhanBacktester:
                     entry_premium = ce_p + pe_p
                     peak_pnl = 0
                     trough_pnl = 0
-                    logger.info(f"Trade Entered on {date_str} at {index.time()} | Spot: {entry_spot} | Lot: {entry_lots}")
-                    
-            time.sleep(1)
+                    if not silent:
+                        logger.info(f"Trade Entered on {date_str} at {index.time()} | Spot: {entry_spot} | Lot: {entry_lots}")
+            
+            time.sleep(0.5)
         
-        self.print_statistics()
+        return self.get_summary(stop_loss_pct, target_pct)
 
-    def record_trade(self, date_str, entry_time, exit_time, entry_spot, exit_spot, ce_strike, pe_strike, pnl_points, lots, peak, trough, reason):
+    def record_trade(self, date_str, entry_time, exit_time, entry_spot, exit_spot, ce_strike, pe_strike, pnl_points, lots, peak, trough, reason, silent=False):
         pnl_inr = pnl_points * self.lot_size * lots
         self.current_capital += pnl_inr
         self.results.append({
@@ -229,7 +250,50 @@ class NiftyTuesdayDhanBacktester:
         })
         logger.info(f"Trade Exited on {date_str} at {exit_time.time()} | Reason: {reason} | PnL: {pnl_inr:.2f}")
 
-    def print_statistics(self):
+    def get_summary(self, sl, tgt):
+        if not self.results:
+            return None
+        df = pd.DataFrame(self.results)
+        total_pnl = df['PnL_INR'].sum()
+        roi = (total_pnl / self.initial_capital) * 100
+        accuracy = (df['Win'].sum() / len(df)) * 100
+        return {
+            'SL': f"{int(sl*100)}%" if sl is not None else "None",
+            'TGT': f"{int(tgt*100)}%",
+            'Trades': len(df),
+            'ROI%': round(roi, 2),
+            'PnL': round(total_pnl, 2),
+            'Accuracy%': round(accuracy, 2)
+        }
+
+    def run_optimization_sweep(self):
+        """Run a sweep over SL and Target combinations."""
+        sl_values = [0.30, 0.50, 1.00, None]
+        tgt_values = [0.50, 0.75, 1.00]
+        
+        sweep_results = []
+        logger.info("Starting Optimization Sweep...")
+        
+        for sl in sl_values:
+            for tgt in tgt_values:
+                summary = self.run_backtest(stop_loss_pct=sl, target_pct=tgt, silent=True)
+                if summary:
+                    sweep_results.append(summary)
+        
+        sweep_df = pd.DataFrame(sweep_results)
+        sweep_df = sweep_df.sort_values(by='ROI%', ascending=False)
+        
+        print("\n=== Optimization Sweep Results (Sorted by ROI) ===")
+        print(sweep_df.to_string(index=False))
+        
+        summary_md = "\n\n### 🎯 Strategy Optimization Sweep Results\n\n| SL | Target | Trades | PnL (INR) | ROI % | Accuracy |\n|---|---|---|---|---|---|\n"
+        for _, row in sweep_df.iterrows():
+            summary_md += f"| {row['SL']} | {row['TGT']} | {row['Trades']} | **₹{row['PnL']:,}** | {row['ROI%']}% | {row['Accuracy%']}% |\n"
+            
+        with open("/Users/anoop/.gemini/antigravity/brain/311c7cff-5d0e-40ca-b43a-de26854c129a/walkthrough.md", "a") as f:
+            f.write(summary_md)
+
+    def print_statistics(self, sl=None, tgt=0.75):
         if not self.results:
             logger.info("No trades executed.")
             return
@@ -239,7 +303,8 @@ class NiftyTuesdayDhanBacktester:
         roi = (total_pnl / self.initial_capital) * 100
         
         md = f"""
-### 📊 Nifty Tuesday Expiry Backtest (Last 2 Weeks, Dhan API)
+### 📊 Nifty Tuesday Optimal Backtest (12 Weeks)
+**Settings:** SL: {sl*100 if sl else 'None'}% | Target: {tgt*100}%
 
 | Metric | Value |
 |--------|-------|
@@ -258,11 +323,10 @@ class NiftyTuesdayDhanBacktester:
         for _, row in df.iterrows():
             md += f"| {row['Date']} | {row['Entry']} | {row['Exit']} | {row['Spot_Entry']} | {row['Spot_Exit']} | {row['Strikes']} | **₹{row['PnL_INR']:,.2f}** | {row['Reason']} |\n"
         
-        with open("/Users/anoop/.gemini/antigravity/brain/311c7cff-5d0e-40ca-b43a-de26854c129a/walkthrough.md", "a") as f:
-            f.write("\n\n---\n\n" + md)
-            
         print(md)
 
 if __name__ == "__main__":
     backtester = NiftyTuesdayDhanBacktester()
-    backtester.run_backtest()
+    # Run the final optimal backtest
+    backtester.run_backtest(stop_loss_pct=None, target_pct=0.75)
+    backtester.print_statistics(sl=None, tgt=0.75)
