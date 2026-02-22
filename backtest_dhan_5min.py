@@ -29,17 +29,16 @@ class YF5MinGammaBacktester:
         self.current_capital = self.initial_capital
         self.margin_per_lot = 120000
         self.lot_size = 25
-        self.stop_loss_pct = 0.30
 
-    def get_past_thursdays(self, df):
-        """Extract unique Thursdays from Yahoo Finance dataframe index."""
+    def get_past_tuesdays(self, df):
+        """Extract unique Tuesdays from Yahoo Finance dataframe index."""
         df['Date'] = df.index.date
         unique_days = df['Date'].unique()
-        thursdays = []
+        tuesdays = []
         for d in unique_days:
-            if d.weekday() == 3: # 3 is Thursday
-                thursdays.append(d)
-        return thursdays
+            if d.weekday() == 1: # 1 is Tuesday
+                tuesdays.append(d)
+        return tuesdays
 
     def approximate_gamma(self, spot_price, strike_price, time_to_expiry_years, iv):
         """Estimate Gamma using Black-Scholes formula."""
@@ -82,10 +81,10 @@ class YF5MinGammaBacktester:
             
         logger.info(f"Actually retrieved {len(df_all)} periods from {df_all.index[0].date()} to {df_all.index[-1].date()}")
         
-        # Get all Thursdays in that range
-        thursdays = self.get_past_thursdays(df_all)
+        # Get all Tuesdays in that range
+        tuesdays = self.get_past_tuesdays(df_all)
         
-        for current_date in thursdays:
+        for current_date in tuesdays:
             df = df_all[df_all['Date'] == current_date].copy()
             if df.empty:
                 continue
@@ -129,32 +128,6 @@ class YF5MinGammaBacktester:
                     unrealized_pnl_points = entry_premium_paid - current_strangle_value # SHORT Strangle
                     peak_pnl = max(peak_pnl, unrealized_pnl_points)
                     trough_pnl = min(trough_pnl, unrealized_pnl_points)
-                    
-                    # Check 30% Stoploss
-                    if current_strangle_value >= entry_premium_paid * (1 + self.stop_loss_pct):
-                        pnl_points = unrealized_pnl_points
-                        pnl_inr = pnl_points * self.lot_size * entry_lots
-                        self.current_capital += pnl_inr
-                        total_daily_pnl += pnl_points
-                        self.results.append({
-                            'Date': current_date.strftime("%Y-%m-%d"),
-                            'Entry_Time': entry_time.strftime("%H:%M"),
-                            'Exit_Time': index.strftime("%H:%M"),
-                            'Spot_Entry': round(entry_spot, 2),
-                            'Spot_Exit': round(spot_price, 2),
-                            'CE_Strike': entry_ce_strike,
-                            'PE_Strike': entry_pe_strike,
-                            'Max_Drawdown': round(trough_pnl, 2),
-                            'Peak_Profit': round(peak_pnl, 2),
-                            'PnL_Points': round(pnl_points, 2),
-                            'PnL_INR': round(pnl_inr, 2),
-                            'Capital': round(self.current_capital, 2),
-                            'Lots': entry_lots,
-                            'Win': False,
-                            'Exit_Reason': 'StopLoss'
-                        })
-                        in_position = False
-                        break # Limit 1 Loss per day logic since we are taking directional Gamma bets
                     
                     # Exit near close (e.g. 15:15 5-min bar)
                     if hour == 15 and minute >= 15:
@@ -237,7 +210,7 @@ class YF5MinGammaBacktester:
         roi = ((self.current_capital - self.initial_capital) / self.initial_capital) * 100
         
         md = f"""
-### 📊 Yahoo Finance 5-Min Backtest (Nifty Thursday Expiries, >1:00 PM, Gamma Spike Strategy, 30% SL)
+### 📊 Yahoo Finance 5-Min Backtest (Nifty Tuesday Expiries, >1:00 PM, Gamma Spike Strategy, No SL)
 
 | Metric | Value |
 |--------|-------|
