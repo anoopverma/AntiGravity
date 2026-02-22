@@ -172,13 +172,13 @@ class NiftyTuesdayDhanBacktester:
                     peak_pnl, trough_pnl = max(peak_pnl, pnl_points), min(trough_pnl, pnl_points)
                     
                     if stop_loss_pct and curr_premium >= entry_premium * (1 + stop_loss_pct):
-                        self.record_trade(date_str, entry_time, index, entry_spot, spot_price, entry_ce_strike, entry_pe_strike, pnl_points, entry_lots, peak_pnl, trough_pnl, 'StopLoss', silent)
+                        self.record_trade(date_str, entry_time, index, entry_spot, spot_price, entry_ce_strike, entry_pe_strike, pnl_points, entry_lots, peak_pnl, trough_pnl, 'StopLoss', entry_premium, curr_premium, silent)
                         in_position = False; break
                     if target_pct and curr_premium <= entry_premium * (1 - target_pct):
-                        self.record_trade(date_str, entry_time, index, entry_spot, spot_price, entry_ce_strike, entry_pe_strike, pnl_points, entry_lots, peak_pnl, trough_pnl, 'Target', silent)
+                        self.record_trade(date_str, entry_time, index, entry_spot, spot_price, entry_ce_strike, entry_pe_strike, pnl_points, entry_lots, peak_pnl, trough_pnl, 'Target', entry_premium, curr_premium, silent)
                         in_position = False; break
                     if index.hour == 15 and index.minute >= 15:
-                        self.record_trade(date_str, entry_time, index, entry_spot, spot_price, entry_ce_strike, entry_pe_strike, pnl_points, entry_lots, peak_pnl, trough_pnl, 'Time', silent)
+                        self.record_trade(date_str, entry_time, index, entry_spot, spot_price, entry_ce_strike, entry_pe_strike, pnl_points, entry_lots, peak_pnl, trough_pnl, 'Time', entry_premium, curr_premium, silent)
                         in_position = False; break
                 
                 if not in_position and index.hour == 13 and index.minute >= 30:
@@ -226,13 +226,13 @@ class NiftyTuesdayDhanBacktester:
                     peak_pnl, trough_pnl = max(peak_pnl, pnl_points), min(trough_pnl, pnl_points)
                     
                     if stop_loss_pct and curr_premium <= entry_premium * (1 - stop_loss_pct):
-                        self.record_trade(date_str, entry_time, index, entry_spot, spot_price, entry_ce_strike, entry_pe_strike, pnl_points, entry_qty // self.lot_size, peak_pnl, trough_pnl, 'StopLoss', silent)
+                        self.record_trade(date_str, entry_time, index, entry_spot, spot_price, entry_ce_strike, entry_pe_strike, pnl_points, entry_qty // self.lot_size, peak_pnl, trough_pnl, 'StopLoss', entry_premium, curr_premium, silent)
                         in_position = False; break
                     if target_pct and curr_premium >= entry_premium * (1 + target_pct):
-                        self.record_trade(date_str, entry_time, index, entry_spot, spot_price, entry_ce_strike, entry_pe_strike, pnl_points, entry_qty // self.lot_size, peak_pnl, trough_pnl, 'Target', silent)
+                        self.record_trade(date_str, entry_time, index, entry_spot, spot_price, entry_ce_strike, entry_pe_strike, pnl_points, entry_qty // self.lot_size, peak_pnl, trough_pnl, 'Target', entry_premium, curr_premium, silent)
                         in_position = False; break
                     if index.hour == 15 and index.minute >= 15:
-                        self.record_trade(date_str, entry_time, index, entry_spot, spot_price, entry_ce_strike, entry_pe_strike, pnl_points, entry_qty // self.lot_size, peak_pnl, trough_pnl, 'Time', silent)
+                        self.record_trade(date_str, entry_time, index, entry_spot, spot_price, entry_ce_strike, entry_pe_strike, pnl_points, entry_qty // self.lot_size, peak_pnl, trough_pnl, 'Time', entry_premium, curr_premium, silent)
                         in_position = False; break
                 
                 if index.hour == 13 and index.minute == 30 and baseline_premium is None:
@@ -306,7 +306,7 @@ class NiftyTuesdayDhanBacktester:
         with open("/Users/anoop/.gemini/antigravity/brain/311c7cff-5d0e-40ca-b43a-de26854c129a/walkthrough.md", "a") as f:
             f.write(summary_md)
 
-    def record_trade(self, date_str, entry_time, exit_time, entry_spot, exit_spot, ce_strike, pe_strike, pnl_points, lots, peak, trough, reason, silent=False):
+    def record_trade(self, date_str, entry_time, exit_time, entry_spot, exit_spot, ce_strike, pe_strike, pnl_points, lots, peak, trough, reason, entry_prem, exit_prem, silent=False):
         pnl_inr = pnl_points * self.lot_size * lots
         self.current_capital += pnl_inr
         self.results.append({
@@ -316,6 +316,8 @@ class NiftyTuesdayDhanBacktester:
             'Spot_Entry': round(entry_spot, 2),
             'Spot_Exit': round(exit_spot, 2),
             'Strikes': f"{ce_strike}/{pe_strike}",
+            'Entry_Price': round(entry_prem, 2),
+            'Exit_Price': round(exit_prem, 2),
             'PnL_Points': round(pnl_points, 2),
             'PnL_INR': round(pnl_inr, 2),
             'Capital': round(self.current_capital, 2),
@@ -344,10 +346,11 @@ class NiftyTuesdayDhanBacktester:
     def print_statistics_sell(self, sl=None, tgt=0.75):
         if not self.results: return
         df = pd.DataFrame(self.results)
+        df['Profit%'] = (df['PnL_Points'] / df['Entry_Price']) * 100
         roi = (df['PnL_INR'].sum() / self.initial_capital) * 100
         print(f"\n--- SELLING STRATEGY RESULTS ---")
         print(f"Total ROI: {roi:.2f}% | Accuracy: {(df['Win'].sum()/len(df))*100:.2f}%")
-        print(df[['Date', 'Entry', 'Exit', 'PnL_INR', 'Reason']].to_string(index=False))
+        print(df[['Date', 'Entry_Price', 'Exit_Price', 'PnL_INR', 'Profit%', 'Reason']].to_string(index=False))
 
     def print_statistics_buy(self, trigger=0.40):
         if not self.results: return
