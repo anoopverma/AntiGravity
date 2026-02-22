@@ -6,6 +6,8 @@ import yfinance as yf
 from scipy.stats import norm
 from collections import deque
 from datetime import datetime, timedelta
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 
 # Configure logging
 logging.basicConfig(
@@ -70,6 +72,14 @@ class BacktestGammaYfStrategy:
             
             self.gamma_window.clear()
             
+            # Lists for plotting
+            plot_times = []
+            plot_spots = []
+            plot_gammas = []
+            plot_baselines = []
+            plot_entry_time = None
+            plot_exit_time = None
+            
             # End of trading day (15:30 IST)
             end_of_day_time = df.index[-1]
             
@@ -121,11 +131,64 @@ class BacktestGammaYfStrategy:
                                 entry_time = index
                     
                     self.gamma_window.append(current_gamma)
+                    
+                # Track for plotting
+                plot_times.append(index)
+                plot_spots.append(spot_price)
+                plot_gammas.append(current_gamma)
+                plot_baselines.append(baseline_gamma if 'baseline_gamma' in locals() and len(self.gamma_window) >= 10 else current_gamma)
 
             logger.info(f"--- Day Total PnL points (estimated): {total_pnl:.2f} ---\n")
+            
+            # Generate the plot
+            self.plot_results(start_date, plot_times, plot_spots, plot_gammas, plot_baselines, plot_entry_time, plot_exit_time)
                 
         except Exception as e:
             logger.error(f"Error during backtest: {e}")
+
+    def plot_results(self, date_str, times, spots, gammas, baselines, entry_time=None, exit_time=None):
+        logger.info(f"Generating plot for {date_str}...")
+        
+        fig, ax1 = plt.subplots(figsize=(12, 6))
+
+        # Plot Spot prices on left Y-axis
+        color = 'tab:blue'
+        ax1.set_xlabel('Time (IST)')
+        ax1.set_ylabel('Nifty 50 Spot Price', color=color)
+        ax1.plot(times, spots, color=color, label='Spot Price')
+        ax1.tick_params(axis='y', labelcolor=color)
+        
+        # Plot markers for trades formatting
+        if entry_time:
+            ax1.axvline(x=entry_time, color='green', linestyle='--', label='Enter Long Straddle')
+        if exit_time:
+            ax1.axvline(x=exit_time, color='red', linestyle='--', label='Exit Position')
+
+        # Create a second Y-axis that shares the same X-axis
+        ax2 = ax1.twinx()  
+        color = 'tab:orange'
+        ax2.set_ylabel('Approx ATM Gamma', color=color)  
+        ax2.plot(times, gammas, color=color, label='ATM Gamma')
+        ax2.plot(times, baselines, color='tab:gray', linestyle=':', label='Baseline Gamma')
+        ax2.tick_params(axis='y', labelcolor=color)
+
+        # Formatting
+        plt.title(f'Nifty Expiry Day Gamma Strategy Backtest: {date_str}')
+        fig.tight_layout()  
+        
+        # Format time on x-axis nicely
+        ax1.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+        
+        # Combine legends
+        lines1, labels1 = ax1.get_legend_handles_labels()
+        lines2, labels2 = ax2.get_legend_handles_labels()
+        ax1.legend(lines1 + lines2, labels1 + labels2, loc='upper left')
+
+        # Save plot
+        filename = f'gamma_backtest_{date_str}.png'
+        plt.savefig(filename, dpi=150)
+        logger.info(f"Plot saved to: {filename}")
+        plt.close()
 
 def main():
     logger.info("Starting Gamma Spike yfinance Backtester...")
