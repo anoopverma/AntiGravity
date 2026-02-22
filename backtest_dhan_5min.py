@@ -71,6 +71,7 @@ class NiftyTuesdayDhanBacktester:
     def fetch_yf_5min_fallback(self, date_str):
         """Fetch 5-min data from YFinance for a specific date."""
         try:
+            import yfinance as yf
             ticker = yf.Ticker("^NSEI")
             # YF only allows 5m data for the last 60 days. 
             # If date_str is older, this might fail or return empty.
@@ -151,8 +152,10 @@ class NiftyTuesdayDhanBacktester:
         self.current_capital = self.initial_capital
         
         for date_str in tuesdays:
-            df = self.cached_data.get(date_str) or self.fetch_dhan_5min_data(date_str)
-            self.cached_data[date_str] = df
+            df = self.cached_data.get(date_str)
+            if df is None:
+                df = self.fetch_dhan_5min_data(date_str)
+                self.cached_data[date_str] = df
             if df.empty: continue
             
             in_position = False
@@ -204,8 +207,10 @@ class NiftyTuesdayDhanBacktester:
         self.current_capital = self.initial_capital
         
         for date_str in tuesdays:
-            df = self.cached_data.get(date_str) or self.fetch_dhan_5min_data(date_str)
-            self.cached_data[date_str] = df
+            df = self.cached_data.get(date_str)
+            if df is None:
+                df = self.fetch_dhan_5min_data(date_str)
+                self.cached_data[date_str] = df
             if df.empty: continue
             
             in_position = False
@@ -264,8 +269,10 @@ class NiftyTuesdayDhanBacktester:
         self.current_capital = self.initial_capital
         
         for date_str in tuesdays:
-            df = self.cached_data.get(date_str) or self.fetch_dhan_5min_data(date_str)
-            self.cached_data[date_str] = df
+            df = self.cached_data.get(date_str)
+            if df is None:
+                df = self.fetch_dhan_5min_data(date_str)
+                self.cached_data[date_str] = df
             if df.empty: continue
             
             baseline_spot = None
@@ -289,9 +296,6 @@ class NiftyTuesdayDhanBacktester:
 
                 if in_position:
                     # Current price of the single directional option
-                    option_type = 'C' if entry_strike > entry_spot else 'P' # Simplified for logging strike
-                    # Re-derive type based on strike relationship is risky if non-standard. 
-                    # Let's just track the 'type' in state.
                     curr_p = self.estimate_option_price(spot_price, entry_strike, dte, IMPLIED_VOL_ASSUMPTION, entry_type)
                     pnl_points = curr_p - entry_premium
                     peak_pnl, trough_pnl = max(peak_pnl, pnl_points), min(trough_pnl, pnl_points)
@@ -344,14 +348,48 @@ class NiftyTuesdayDhanBacktester:
                             if not silent: logger.info(f"Straddle Breakout! {direction} Buy: Strike {entry_strike} @ {entry_premium:.2f} (Straddle: {curr_straddle:.2f} > {straddle_baseline:.2f})")
             
             time.sleep(0.1)
-        return self.get_summary_directional()
+        return self.get_summary_directional(stop_loss_pct, target_pct)
 
-    def get_summary_directional(self):
+    def run_directional_optimization_sweep(self):
+        """Run a sweep over SL and Target combinations for Directional Buy Strategy."""
+        sl_values = [0.10, 0.20, 0.30, 0.50, None]
+        tgt_values = [0.50, 1.00, 2.00, 5.00, None]
+        
+        sweep_results = []
+        logger.info("Starting Directional Strategy Optimization Sweep...")
+        
+        for sl in sl_values:
+            for tgt in tgt_values:
+                summary = self.run_directional_buy_backtest(stop_loss_pct=sl, target_pct=tgt, silent=True)
+                if summary:
+                    sweep_results.append(summary)
+        
+        sweep_df = pd.DataFrame(sweep_results)
+        sweep_df = sweep_df.sort_values(by='ROI%', ascending=False)
+        
+        print("\n=== Directional Optimization Sweep Results (Sorted by ROI) ===")
+        print(sweep_df.to_string(index=False))
+        
+        summary_md = "\n\n### 🎯 Directional Strategy Optimization Sweep Results\n\n| SL | Target | Trades | PnL (INR) | ROI % | Accuracy |\n|---|---|---|---|---|---|---|\n"
+        for _, row in sweep_df.iterrows():
+            summary_md += f"| {row['SL']} | {row['TGT']} | {row['Trades']} | **₹{row['PnL']:,}** | {row['ROI%']}% | {row['Accuracy%']}% |\n"
+            
+        with open("/Users/anoop/.gemini/antigravity/brain/311c7cff-5d0e-40ca-b43a-de26854c129a/walkthrough.md", "a") as f:
+            f.write(summary_md)
+
+    def get_summary_directional(self, sl, tgt):
         if not self.results: return None
         df = pd.DataFrame(self.results)
         pnl = df['PnL_INR'].sum()
         roi = (pnl / self.initial_capital) * 100
-        return {'ROI%': round(roi, 2), 'PnL': round(pnl, 2), 'Accuracy%': round((df['Win'].sum()/len(df))*100, 2), 'Trades': len(df)}
+        return {
+            'SL': f"{int(sl*100)}%" if sl else "None",
+            'TGT': f"{int(tgt*100)}%" if tgt else "EOD",
+            'Trades': len(df),
+            'ROI%': round(roi, 2),
+            'PnL': round(pnl, 2),
+            'Accuracy%': round((df['Win'].sum()/len(df))*100, 2)
+        }
 
     def get_summary_sell(self, sl, tgt):
         if not self.results: return None
@@ -388,7 +426,7 @@ class NiftyTuesdayDhanBacktester:
         for tr in trigger_values:
             for sl in sl_values:
                 for tgt in tgt_values:
-                    summary = self.run_backtest(jump_trigger=tr, stop_loss_pct=sl, target_pct=tgt, silent=True)
+                    summary = self.run_buy_backtest(jump_trigger=tr, stop_loss_pct=sl, target_pct=tgt, silent=True)
                     if summary:
                         sweep_results.append(summary)
         
@@ -475,10 +513,11 @@ if __name__ == "__main__":
     
     print("\n=== Nifty Tuesday Expiry Strategy Selection ===")
     print("1. Optimal SELLING Strategy (75% Target)")
-    print("2. DIRECTIONAL BUY Strategy (₹9 Floor + Straddle Breakout)")
+    print("2. DIRECTIONAL BUY Strategy Matrix")
     print("3. Momentum BUYING Strategy (40% Jump)")
+    print("4. Optimization SWEEP: Directional Buy")
     
-    choice = "2" # Running the new strategy requested by user
+    choice = "1" # Set back to the optimal 100% accuracy selling strategy
     
     if choice == "1":
         backtester.run_sell_backtest(stop_loss_pct=None, target_pct=0.75)
@@ -486,6 +525,8 @@ if __name__ == "__main__":
     elif choice == "2":
         backtester.run_directional_buy_backtest(stop_loss_pct=0.30, target_pct=1.00)
         backtester.print_statistics_directional()
-    else:
+    elif choice == "3":
         backtester.run_buy_backtest(jump_trigger=0.40)
         backtester.print_statistics_buy(trigger=0.40)
+    elif choice == "4":
+        backtester.run_directional_optimization_sweep()
