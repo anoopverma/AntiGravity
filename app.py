@@ -121,11 +121,11 @@ def index():
 def dhan_connect():
     """Redirect user to Dhan login page to obtain a tokenId."""
     import urllib.parse
-    client_id   = os.getenv("DHAN_CLIENT_ID", CLIENT_ID)
+    api_key      = os.getenv("DHAN_API_KEY", "")
     redirect_uri = urllib.parse.quote(request.host_url.rstrip('/') + '/dhan/callback', safe='')
     dhan_login_url = (
         f"https://api.dhan.co/partner/oauth/authorize"
-        f"?client_id={client_id}&redirect_uri={redirect_uri}&response_type=code"
+        f"?client_id={api_key}&redirect_uri={redirect_uri}&response_type=code"
     )
     return redirect(dhan_login_url)
 
@@ -162,7 +162,7 @@ def dhan_callback():
                 'https://api.dhan.co/partner/oauth/token',
                 json={
                     'tokenId':      token_id,
-                    'clientId':     os.getenv("DHAN_CLIENT_ID", CLIENT_ID),
+                    'clientId':     os.getenv("DHAN_API_KEY", ""),
                     'clientSecret': os.getenv("DHAN_CLIENT_SECRET", ""),
                 },
                 timeout=10,
