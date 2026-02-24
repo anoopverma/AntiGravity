@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15
+    container_name: antigravity_db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-Aidni@#123}
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  app:
+    build: .
+    container_name: antigravity_app
+    restart: always
+    depends_on:
+      - db
+    environment:
+      - POSTGRES_URI=postgresql://postgres:${DB_PASSWORD:-Aidni@#123}@db:5432/postgres
+      - DHAN_CLIENT_ID=${DHAN_CLIENT_ID}
+      - DHAN_ACCESS_TOKEN=${DHAN_ACCESS_TOKEN}
+      - PAPER_TRADE=True
+    ports:
+      - "5002:5002"
+
+volumes:
+  postgres_data:

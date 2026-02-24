@@ -1,5 +1,8 @@
-# Dhanhq Python client for API integration
 dhanhq==2.2.0rc1
 python-dotenv==1.0.1
 pandas==2.2.3
 schedule==1.2.1
+flask==3.0.3
+sqlalchemy==2.0.31
+psycopg2-binary==2.9.9
+gunicorn==22.0.0
