@@ -9,8 +9,6 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${DB_PASSWORD:-Aidni@#123}
       POSTGRES_DB: postgres
-    ports:
-      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
@@ -26,7 +24,18 @@ services:
       - DHAN_ACCESS_TOKEN=${DHAN_ACCESS_TOKEN}
       - PAPER_TRADE=True
     ports:
-      - "5002:5002"
+      - "443:5002" # Expose publicly on port 443 → internal port 5002
+
+  nginx:
+    image: nginx:alpine
+    container_name: antigravity_nginx
+    restart: always
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
 
 volumes:
   postgres_data:
