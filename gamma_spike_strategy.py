@@ -4,7 +4,7 @@ import logging
 from collections import deque
 from datetime import datetime
 from dotenv import load_dotenv
-from dhanhq import dhanhq, DhanContext
+from dhanhq import dhanhq
 
 # Configure logging
 logging.basicConfig(
@@ -23,11 +23,10 @@ PAPER_TRADE = os.getenv("PAPER_TRADE", "True").lower() == "true"
 class NiftyGammaSpikeStrategy:
     def __init__(self, client_id, access_token):
         """Initialize the Dhan API client and strategy parameters."""
-        self.dhan_context = DhanContext(client_id, access_token)
-        self.dhan = dhanhq(self.dhan_context)
+        self.dhan = dhanhq(str(client_id), str(access_token))
         
         self.nifty_security_id = "13"
-        self.exchange_segment = self.dhan.IDX_I # Index segment
+        self.exchange_segment = self.dhan.INDEX # Index segment
         self.fno_segment = self.dhan.NSE_FNO
         
         # Gamma Spike parameters
@@ -108,7 +107,7 @@ class NiftyGammaSpikeStrategy:
             
         return False
 
-    def place_long_straddle(self, ce_security_id, pe_security_id, lot_size=25):
+    def place_long_straddle(self, ce_security_id, pe_security_id, lot_size=65):
         """Place market BUY orders for ATM CE and PE (Long Straddle) for Gamma explosion."""
         if PAPER_TRADE:
             logger.info(f"[PAPER TRADE] Placed Long Straddle for CE: {ce_security_id}, PE: {pe_security_id}, Qty: {lot_size}")
@@ -197,11 +196,11 @@ def main():
     
     logger.info(f"Monitoring Gamma for Expiry: {current_expiry}")
     
-    # Run the loop every 5 seconds (respecting rate limits)
+    # Run the loop every 60 seconds (respecting rate limits)
     try:
         while True:
             strategy.run_iteration(current_expiry)
-            time.sleep(5)
+            time.sleep(60)
     except KeyboardInterrupt:
         logger.info("Strategy stopped by user.")
 

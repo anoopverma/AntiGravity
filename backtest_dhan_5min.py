@@ -5,7 +5,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
-from dhanhq import dhanhq, DhanContext
+from dhanhq import dhanhq
 from scipy.stats import norm
 from collections import deque
 
@@ -29,7 +29,7 @@ class NiftyTuesdayDhanBacktester:
         if not self.client_id or not self.access_token:
             raise ValueError("Dhan API credentials not found in .env")
             
-        self.dhan = dhanhq(DhanContext(self.client_id, self.access_token))
+        self.dhan = dhanhq(str(self.client_id), str(self.access_token))
         
         # Strategy Parameters
         self.initial_capital = 500000
@@ -443,6 +443,153 @@ class NiftyTuesdayDhanBacktester:
         with open("/Users/anoop/.gemini/antigravity/brain/311c7cff-5d0e-40ca-b43a-de26854c129a/walkthrough.md", "a") as f:
             f.write(summary_md)
 
+    def run_v4_backtest(self, vix_threshold=12.5, target_lock_in=0.30, trailing_step=0.15, initial_sl=0.40, expansion_threshold=1.15, trend_filter_pct=0.15):
+        tuesdays = self.get_last_n_tuesdays(12)
+        logger.info(f"Starting V4 Trailing SL Strategy Backtest (Enhanced) - Last 12 Weeks")
+        self.results = []
+        self.current_capital = self.initial_capital
+        
+        # Simple VIX mock > 12.5 assumption for backtesting past history
+        current_vix = 13.0
+        
+        for date_str in tuesdays:
+            df = self.cached_data.get(date_str)
+            if df is None:
+                df = self.fetch_dhan_5min_data(date_str)
+                self.cached_data[date_str] = df
+            if df.empty: continue
+            
+            position = None
+            benchmark_straddle = None
+            benchmark_spot = None
+            entry_time, entry_spot, entry_strike, entry_premium = None, 0, 0, 0
+            entry_qty = 0
+            eod_time = df.index[-1].replace(hour=15, minute=30)
+            
+            atm_ce_145, atm_pe_145 = None, None
+            
+            for index, row in df.iterrows():
+                spot_price = row['close']
+                dte = (eod_time - index).total_seconds() / (365 * 24 * 3600)
+                
+                if index.hour == 13 and index.minute == 45:
+                    benchmark_spot = spot_price
+                    atm_strike = round(spot_price / 50) * 50
+                    atm_ce_145 = atm_strike
+                    atm_pe_145 = atm_strike
+                    benchmark_straddle = self.estimate_option_price(spot_price, atm_ce_145, dte, IMPLIED_VOL_ASSUMPTION, 'C') + \
+                                         self.estimate_option_price(spot_price, atm_pe_145, dte, IMPLIED_VOL_ASSUMPTION, 'P')
+
+                if benchmark_straddle and position is None and index.time() > datetime.strptime("13:45", "%H:%M").time():
+                    curr_straddle = self.estimate_option_price(spot_price, atm_ce_145, dte, IMPLIED_VOL_ASSUMPTION, 'C') + \
+                                    self.estimate_option_price(spot_price, atm_pe_145, dte, IMPLIED_VOL_ASSUMPTION, 'P')
+                                    
+                    # Trend Direction Filter
+                    pct_change_from_benchmark = ((spot_price - benchmark_spot) / benchmark_spot) * 100
+                    trend_confirmed = abs(pct_change_from_benchmark) >= trend_filter_pct
+
+                    # Only buy if IV genuinely spiked OR the market took a strong directional shift 
+                    if (curr_straddle >= (benchmark_straddle * expansion_threshold) or trend_confirmed) and current_vix >= vix_threshold:
+                        opt_type = 'C' if spot_price > benchmark_spot else 'P'
+                        target_strike = round(spot_price / 50) * 50
+                        entry_premium = self.estimate_option_price(spot_price, target_strike, dte, IMPLIED_VOL_ASSUMPTION, opt_type)
+                        
+                        # Fix 10% Position Sizing (Never bet 100% of account on options)
+                        target_investment = self.initial_capital * 0.10
+                        safe_premium = max(0.50, entry_premium) # Prevent division by zero and penny stocks
+                        qty = max(self.lot_size, int(target_investment // (safe_premium * self.lot_size)) * self.lot_size)
+                        
+                        position = {
+                            'type': opt_type, 
+                            'strike': target_strike,
+                            'entry': entry_premium, 
+                            'peak': entry_premium,
+                            'qty': qty
+                        }
+                        
+                        entry_time, entry_spot = index, spot_price
+
+                elif position:
+                    current_price = self.estimate_option_price(spot_price, position['strike'], dte, IMPLIED_VOL_ASSUMPTION, position['type'])
+                    
+                    if current_price > position['peak']:
+                        position['peak'] = current_price
+                        
+                    if position['peak'] >= position['entry'] * (1 + target_lock_in):
+                        current_sl = position['peak'] * (1 - trailing_step)
+                        reason = "Trailing SL"
+                    else:
+                        current_sl = position['entry'] * (1 - initial_sl)
+                        reason = "Initial SL"
+                        
+                    time_exit = index.hour == 15 and index.minute >= 25
+                    
+                    if current_price <= current_sl or time_exit:
+                        reason = "Time Exit" if time_exit else reason
+                        pnl_points = current_price - position['entry']
+                        pnl_inr = pnl_points * position['qty']
+                        self.current_capital += pnl_inr
+                        
+                        self.results.append({
+                            'Date': date_str,
+                            'Entry_Time': entry_time.strftime("%H:%M:%S"),
+                            'Exit_Time': index.strftime("%H:%M:%S"),
+                            'Option_Type': position['type'],
+                            'Action': "BUY",
+                            'Exit_Action': "SELL",
+                            'Buy_Price': round(position['entry'], 2),
+                            'Peak_Price': round(position['peak'], 2),
+                            'Sell_Price': round(current_price, 2),
+                            'PnL_Points': round(pnl_points, 2),
+                            'Profit_Loss_INR': round(pnl_inr, 2),
+                            'ROI%': round((pnl_points / position['entry']) * 100, 2),
+                            'Reason': reason
+                        })
+                        position = None
+                        break
+
+            time.sleep(0.1)
+        
+        self.print_summary_v4()
+        self.save_to_postgres(table_name="historical_backtests", strategy_name="V4_Trailing_SL")
+
+    def print_summary_v4(self):
+        if not self.results:
+            print("\nNo Trades Executed in this Period.")
+            return
+            
+        df = pd.DataFrame(self.results)
+        df['Win'] = df['Profit_Loss_INR'] > 0
+        total_pnl = df['Profit_Loss_INR'].sum()
+        roi = (total_pnl / self.initial_capital) * 100
+        
+        print("\n=== V4 STRATEGY 12-WEEK BACKTEST RESULTS ===")
+        print(f"Total Return: {roi:.2f}% (₹{total_pnl:,.2f})")
+        print(f"Total Trades: {len(df)}")
+        print(f"Win Rate: {(df['Win'].sum() / len(df)) * 100:.2f}%\n")
+        print(df.to_string(index=False))
+
+    def save_to_postgres(self, table_name="historical_backtests", strategy_name="Unknown"):
+        uri = os.getenv("POSTGRES_URI", "postgresql://postgres:postgres@localhost:5432/postgres")
+        if not self.results:
+            logger.warning("No results to save to database.")
+            return
+
+        try:
+            from sqlalchemy import create_engine
+            engine = create_engine(uri)
+            df = pd.DataFrame(self.results)
+            # Injecting strategy and execution metadata at the very front
+            df.insert(0, 'Run_Date', datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+            df.insert(1, 'Strategy_Name', strategy_name)
+            # Appending to a unified database table
+            df.to_sql(table_name, con=engine, if_exists='append', index=False)
+            logger.info(f"Successfully appended {len(df)} records to PostgreSQL table '{table_name}'")
+            print(f"-> DB SYNC: Data appended to unified Local PostgreSQL table ({table_name}) for analysis.")
+        except Exception as e:
+            logger.error(f"Failed to save to PostgreSQL: {e}")
+            print(f"-> DB SYNC ERROR: Is PostgreSQL running locally? Error: {e}")
+
     def record_trade(self, date_str, entry_time, exit_time, entry_spot, exit_spot, ce_strike, pe_strike, pnl_points, lots, peak, trough, reason, entry_prem, exit_prem, silent=False):
         pnl_inr = pnl_points * self.lot_size * lots
         self.current_capital += pnl_inr
@@ -515,9 +662,9 @@ if __name__ == "__main__":
     print("1. Optimal SELLING Strategy (75% Target)")
     print("2. DIRECTIONAL BUY Strategy Matrix")
     print("3. Momentum BUYING Strategy (40% Jump)")
-    print("4. Optimization SWEEP: Directional Buy")
+    print("5. V4 Trailing SL Strategy")
     
-    choice = "1" # Set back to the optimal 100% accuracy selling strategy
+    choice = "5" 
     
     if choice == "1":
         backtester.run_sell_backtest(stop_loss_pct=None, target_pct=0.75)
@@ -530,3 +677,5 @@ if __name__ == "__main__":
         backtester.print_statistics_buy(trigger=0.40)
     elif choice == "4":
         backtester.run_directional_optimization_sweep()
+    elif choice == "5":
+        backtester.run_v4_backtest()
