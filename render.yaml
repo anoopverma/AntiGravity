@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: antigravity-dashboard
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    envVars:
+      - key: DHAN_CLIENT_ID
+        sync: false
+      - key: DHAN_ACCESS_TOKEN
+        sync: false
+      - key: PAPER_TRADE
+        value: "True"
+      - key: POSTGRES_URI
+        fromDatabase:
+          name: antigravity-db
+          property: connectionString
+
+databases:
+  - name: antigravity-db
+    plan: free
+    databaseName: antigravity
+    user: antigravity

@@ -19,8 +19,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the current directory contents into the container
 COPY . .
 
-# Expose the port the app runs on
-EXPOSE 5002
+# Render injects PORT env var; fall back to 5002 locally
+ENV PORT=5002
+EXPOSE $PORT
 
-# Run the application using gunicorn for production
-CMD ["gunicorn", "--bind", "0.0.0.0:5002", "--workers", "2", "--threads", "4", "app:app"]
+# Run using gunicorn on the dynamic port
+CMD gunicorn --bind "0.0.0.0:$PORT" --workers 2 --threads 4 app:app
