@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AntiGravity — Login</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        :root {
+            --bg-dark: #0f1115;
+            --bg-card: #1c1f26;
+            --text-main: #f0f0f0;
+            --text-dim: #8b949e;
+            --accent: #238636;
+            --accent-h: #2ea043;
+            --danger: #da3633;
+            --border: #30363d;
+            --glow: rgba(35, 134, 54, 0.35);
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background-color: var(--bg-dark);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* animated background orbs */
+        body::before,
+        body::after {
+            content: '';
+            position: fixed;
+            border-radius: 50%;
+            filter: blur(120px);
+            opacity: 0.18;
+            pointer-events: none;
+            animation: drift 12s ease-in-out infinite alternate;
+        }
+
+        body::before {
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, #238636, transparent 70%);
+            top: -150px;
+            left: -150px;
+        }
+
+        body::after {
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle, #1f6feb, transparent 70%);
+            bottom: -120px;
+            right: -120px;
+            animation-delay: -6s;
+        }
+
+        @keyframes drift {
+            from {
+                transform: translate(0, 0) scale(1);
+            }
+
+            to {
+                transform: translate(40px, 30px) scale(1.08);
+            }
+        }
+
+        .login-box {
+            position: relative;
+            z-index: 10;
+            width: 100%;
+            max-width: 420px;
+            background: rgba(28, 31, 38, 0.85);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 2.8rem 2.5rem 2.5rem;
+            box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.04),
+                0 24px 60px rgba(0, 0, 0, 0.6),
+                0 0 80px var(--glow);
+            animation: fadeUp 0.5s ease both;
+        }
+
+        @keyframes fadeUp {
+            from {
+                opacity: 0;
+                transform: translateY(24px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 0.4rem;
+        }
+
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #238636, #1f6feb);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.3rem;
+            box-shadow: 0 0 20px var(--glow);
+        }
+
+        .logo-text {
+            font-size: 1.35rem;
+            font-weight: 700;
+            color: var(--text-main);
+            letter-spacing: -0.5px;
+        }
+
+        .logo-text span {
+            color: var(--accent-h);
+        }
+
+        .subtitle {
+            color: var(--text-dim);
+            font-size: 0.82rem;
+            margin-bottom: 2rem;
+            margin-left: 50px;
+            letter-spacing: 0.02em;
+        }
+
+        .form-group {
+            margin-bottom: 1.2rem;
+        }
+
+        label {
+            display: block;
+            font-size: 0.78rem;
+            font-weight: 500;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            margin-bottom: 0.5rem;
+        }
+
+        input {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 0.75rem 1rem;
+            color: var(--text-main);
+            font-family: inherit;
+            font-size: 0.95rem;
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+        }
+
+        input:focus {
+            border-color: var(--accent);
+            background: rgba(35, 134, 54, 0.06);
+            box-shadow: 0 0 0 3px rgba(35, 134, 54, 0.18);
+        }
+
+        input::placeholder {
+            color: #555;
+        }
+
+        .btn-login {
+            width: 100%;
+            margin-top: 0.6rem;
+            padding: 0.82rem;
+            background: linear-gradient(135deg, #238636, #1f6feb);
+            border: none;
+            border-radius: 8px;
+            color: #fff;
+            font-family: inherit;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            letter-spacing: 0.02em;
+            transition: opacity 0.2s, transform 0.15s, box-shadow 0.2s;
+            box-shadow: 0 4px 20px rgba(35, 134, 54, 0.3);
+        }
+
+        .btn-login:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+            box-shadow: 0 6px 24px rgba(35, 134, 54, 0.4);
+        }
+
+        .btn-login:active {
+            transform: translateY(0);
+        }
+
+        .error-msg {
+            background: rgba(218, 54, 51, 0.12);
+            border: 1px solid rgba(218, 54, 51, 0.35);
+            color: #ff6b68;
+            border-radius: 8px;
+            padding: 0.65rem 0.9rem;
+            font-size: 0.84rem;
+            margin-bottom: 1.2rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            animation: shake 0.35s ease;
+        }
+
+        @keyframes shake {
+
+            0%,
+            100% {
+                transform: translateX(0)
+            }
+
+            25% {
+                transform: translateX(-6px)
+            }
+
+            75% {
+                transform: translateX(6px)
+            }
+        }
+
+        .divider {
+            border: none;
+            border-top: 1px solid var(--border);
+            margin: 1.5rem 0 1.2rem;
+        }
+
+        .footer-note {
+            text-align: center;
+            font-size: 0.75rem;
+            color: #444;
+        }
+
+        .footer-note span {
+            color: var(--accent-h);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="login-box">
+        <div class="logo">
+            <div class="logo-icon">⚡</div>
+            <div class="logo-text">Anti<span>Gravity</span></div>
+        </div>
+        <div class="subtitle">Strategy Engine — Secure Access</div>
+
+        {% if error %}
+        <div class="error-msg">
+            <span>⚠</span> {{ error }}
+        </div>
+        {% endif %}
+
+        <form method="POST" action="/login">
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input id="username" name="username" type="text" placeholder="Enter username" autocomplete="username"
+                    value="{{ username|default('') }}" required autofocus>
+            </div>
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input id="password" name="password" type="password" placeholder="Enter password"
+                    autocomplete="current-password" required>
+            </div>
+            <button class="btn-login" type="submit">Sign In →</button>
+        </form>
+
+        <hr class="divider">
+        <div class="footer-note">Protected by AntiGravity &nbsp;·&nbsp; <span>v4.0</span></div>
+    </div>
+</body>
+
+</html>

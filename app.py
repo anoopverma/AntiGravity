@@ -4,9 +4,13 @@ import time
 import logging
 import pandas as pd
 from datetime import datetime
+from functools import wraps
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
-from flask import Flask, render_template, jsonify, request, make_response
+from flask import (
+    Flask, render_template, jsonify, request,
+    make_response, redirect, url_for, session
+)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -15,6 +19,19 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 app = Flask(__name__)
+app.secret_key = os.getenv("SECRET_KEY", "antigravity-secret-key-change-in-prod")
+
+# ── Auth helpers ─────────────────────────────────────────────────────────────
+DASHBOARD_USER = os.getenv("DASHBOARD_USERNAME", "admin")
+DASHBOARD_PASS = os.getenv("DASHBOARD_PASSWORD", "antigravity2024")
+
+def login_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get("logged_in"):
+            return redirect(url_for("login_page"))
+        return f(*args, **kwargs)
+    return decorated
 
 # ── Dhan API client ──────────────────────────────────────────────────────────
 # Lazy/safe init: app must boot even without keys (Render dashboard-only mode)
@@ -66,7 +83,31 @@ def strategy_loop():
 
 # ── Routes ───────────────────────────────────────────────────────────────────
 
+@app.route('/login', methods=['GET', 'POST'])
+def login_page():
+    if session.get("logged_in"):
+        return redirect(url_for("index"))
+    error = None
+    username = ""
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+        if username == DASHBOARD_USER and password == DASHBOARD_PASS:
+            session["logged_in"] = True
+            session["username"] = username
+            return redirect(url_for("index"))
+        error = "Invalid username or password. Please try again."
+    return render_template("login.html", error=error, username=username)
+
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for("login_page"))
+
+
 @app.route('/')
+@login_required
 def index():
     response = make_response(render_template('index.html'))
     response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'

@@ -11,6 +11,12 @@ services:
         sync: false
       - key: PAPER_TRADE
         value: "True"
+      - key: SECRET_KEY
+        generateValue: true          # Render auto-generates a secure random value
+      - key: DASHBOARD_USERNAME
+        sync: false                  # Set in Render dashboard: default is 'admin'
+      - key: DASHBOARD_PASSWORD
+        sync: false                  # Set in Render dashboard: default is 'antigravity2024'
       - key: POSTGRES_URI
         fromDatabase:
           name: antigravity-db
