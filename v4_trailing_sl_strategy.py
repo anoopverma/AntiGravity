@@ -3,7 +3,7 @@ import time
 import datetime
 import logging
 from dotenv import load_dotenv
-from dhanhq import dhanhq
+from dhanhq import dhanhq, DhanContext
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -18,7 +18,7 @@ PAPER_TRADE = os.getenv("PAPER_TRADE", "True").lower() == "true"
 
 class NiftyV4TrailingSLStrategy:
     def __init__(self, target_expiry):
-        self.dhan = dhanhq(str(CLIENT_ID), str(ACCESS_TOKEN))
+        self.dhan = dhanhq(DhanContext(str(CLIENT_ID), str(ACCESS_TOKEN)))
         self.target_expiry = target_expiry
         self.lot_size = 65
         self.running = False

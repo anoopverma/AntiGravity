@@ -40,9 +40,9 @@ ACCESS_TOKEN = os.getenv("DHAN_ACCESS_TOKEN", "")
 
 dhan = None
 try:
-    from dhanhq import dhanhq as _DhanHQ
+    from dhanhq import dhanhq as _DhanHQ, DhanContext as _DhanCtx
     if CLIENT_ID and ACCESS_TOKEN:
-        dhan = _DhanHQ(str(CLIENT_ID), str(ACCESS_TOKEN))
+        dhan = _DhanHQ(_DhanCtx(str(CLIENT_ID), str(ACCESS_TOKEN)))
         logger.info("Dhan client initialised successfully.")
     else:
         logger.warning("DHAN_CLIENT_ID / DHAN_ACCESS_TOKEN not set — trading disabled.")
@@ -203,8 +203,8 @@ def dhan_save_token():
     if not new_token:
         return jsonify({"status": "error", "message": "No token provided"}), 400
     try:
-        from dhanhq import dhanhq as _DhanHQ
-        dhan = _DhanHQ(str(CLIENT_ID), new_token)
+        from dhanhq import dhanhq as _DhanHQ, DhanContext as _DhanCtx
+        dhan = _DhanHQ(_DhanCtx(str(CLIENT_ID), new_token))
         if strategy:
             strategy.dhan = dhan          # update the live strategy instance too
         logger.info("Dhan client hot-reloaded with new access token.")
