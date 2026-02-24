@@ -62,7 +62,8 @@ def get_status():
         "running": getattr(strategy, 'running', False),
         "paused": getattr(strategy, 'paused', False),
         "in_position": getattr(strategy, 'in_position', False),
-        "unrealized_pnl": getattr(strategy, 'unrealized_pnl', 0)
+        "unrealized_pnl": getattr(strategy, 'unrealized_pnl', 0),
+        "realized_pnl": getattr(strategy, 'realized_pnl', 0)
     })
 
 @app.route('/api/start', methods=['POST'])
@@ -126,7 +127,7 @@ def get_backtests():
     uri = os.getenv("POSTGRES_URI", "postgresql://postgres:Aidni%40%23123@localhost:5432/postgres")
     try:
         engine = create_engine(uri)
-        df = pd.read_sql("SELECT * FROM historical_backtests ORDER BY \"Entry_Time\" DESC", con=engine)
+        df = pd.read_sql("SELECT * FROM historical_backtests ORDER BY \"Date\" DESC, \"Entry_Time\" DESC", con=engine)
         return jsonify({"status": "success", "data": df.to_dict(orient='records')})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})

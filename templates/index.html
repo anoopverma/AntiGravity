@@ -26,7 +26,7 @@
         }
 
         .container {
-            max-width: 900px;
+            max-width: 1400px;
             margin: 0 auto;
         }
 
@@ -236,21 +236,28 @@
         </div>
 
         <div class="card">
-            <div class="card-title">Historical Backtests Database (PostgreSQL)</div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <div class="card-title" style="margin-bottom: 0;">Historical Backtests Database (PostgreSQL)</div>
+                <button class="btn-start" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;"
+                    onclick="fetchBacktests()">🔄 Refresh Records</button>
+            </div>
             <div class="table-container">
                 <table id="backtest-table">
                     <thead>
                         <tr>
+                            <th>#</th>
                             <th>Run Date</th>
                             <th>Strategy</th>
                             <th>Trade Date</th>
                             <th>Type</th>
                             <th>Action</th>
+                            <th>Qty</th>
+                            <th>Entry</th>
                             <th>Exit</th>
                             <th>Buy</th>
                             <th>Peak</th>
                             <th>Sell</th>
-                            <th>PnL</th>
+                            <th>PNL</th>
                             <th>ROI%</th>
                             <th>Reason</th>
                             <th>Result</th>
@@ -290,10 +297,14 @@
 
                 document.getElementById('position-text').innerText = data.in_position ? "Active" : "None";
 
-                const pnlVal = data.unrealized_pnl;
+                const uPnl = data.unrealized_pnl || 0;
+                const rPnl = data.realized_pnl || 0;
+                const totalPnl = uPnl + rPnl;
+
                 const pnlElement = document.getElementById('pnl-text');
-                pnlElement.innerText = `₹${pnlVal.toLocaleString()}`;
-                pnlElement.style.color = pnlVal >= 0 ? '#4ade80' : '#f87171';
+                pnlElement.innerText = `₹${totalPnl.toLocaleString()}`;
+                pnlElement.title = `Unrealized: ₹${uPnl.toLocaleString()} | Realized: ₹${rPnl.toLocaleString()}`;
+                pnlElement.style.color = totalPnl >= 0 ? '#4ade80' : '#f87171';
 
             } catch (err) {
                 console.error("Status fetch failed", err);
@@ -335,22 +346,30 @@
 
                 if (data.status === "success" && data.data.length > 0) {
                     tbody.innerHTML = '';
-                    data.data.forEach(row => {
+                    data.data.forEach((row, idx) => {
                         const tr = document.createElement('tr');
-                        const isWin = parseFloat(row.Profit_Loss_INR) > 0;
+                        // Use exact DB values — no re-computation
+                        const pnl = parseFloat(row.PNL) || 0;
+                        const roi = parseFloat(row['ROI%']) || 0;
+                        const isWin = pnl > 0;
+                        const fmt = (n) => n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
                         tr.className = isWin ? 'win' : 'loss';
                         tr.innerHTML = `
+                            <td style="color:#8b949e;">${idx + 1}</td>
                             <td>${row.Run_Date || '-'}</td>
                             <td>${row.Strategy_Name || '-'}</td>
                             <td>${row.Date || '-'}</td>
                             <td>${row.Option_Type || '-'}</td>
                             <td>${row.Action || '-'}</td>
+                            <td>${row.Qty || '-'}</td>
+                            <td>${row.Entry_Time || '-'}</td>
                             <td>${row.Exit_Time || '-'}</td>
-                            <td>₹${row.Buy_Price || 0}</td>
-                            <td>₹${row.Peak_Price || 0}</td>
-                            <td>₹${row.Sell_Price || 0}</td>
-                            <td class="${isWin ? 'win' : 'loss'}">₹${row.Profit_Loss_INR ? parseFloat(row.Profit_Loss_INR).toLocaleString() : 0}</td>
-                            <td class="${isWin ? 'win' : 'loss'}">${row['ROI%'] || 0}%</td>
+                            <td>₹${row.Buy_Price ?? 0}</td>
+                            <td>₹${row.Peak_Price ?? 0}</td>
+                            <td>₹${row.Sell_Price ?? 0}</td>
+                            <td class="${isWin ? 'win' : 'loss'}">₹${fmt(pnl)}</td>
+                            <td class="${isWin ? 'win' : 'loss'}">${roi.toFixed(2)}%</td>
                             <td>${row.Reason || '-'}</td>
                             <td class="${isWin ? 'win' : 'loss'}"><b>${isWin ? 'WIN' : 'LOSS'}</b></td>
                         `;
@@ -358,16 +377,17 @@
                     });
 
                     // Summarize all records
+                    const INITIAL_CAPITAL = 500000; // ₹5,00,000
                     const totalTrades = data.data.length;
-                    const winningTrades = data.data.filter(r => parseFloat(r.Profit_Loss_INR) > 0).length;
+                    const winningTrades = data.data.filter(r => parseFloat(r.PNL) > 0).length;
                     const accuracy = ((winningTrades / totalTrades) * 100).toFixed(2);
-                    const totalPnL = data.data.reduce((sum, r) => sum + parseFloat(r.Profit_Loss_INR || 0), 0);
-                    const totalROI = data.data.reduce((sum, r) => sum + parseFloat(r['ROI%'] || 0), 0);
+                    const totalPnL = data.data.reduce((sum, r) => sum + parseFloat(r.PNL || 0), 0);
+                    const totalROI = (totalPnL / INITIAL_CAPITAL) * 100; // Overall ROI on capital
 
                     const isTotalWin = totalPnL > 0;
                     document.getElementById('backtest-tfoot').innerHTML = `
                         <tr style="background-color: #161b22; font-weight: bold; border-top: 2px solid #30363d; position: sticky; bottom: 0; z-index: 10;">
-                            <td colspan="9" style="text-align: right; color: #ffffff;">OVERALL SUMMARY (${totalTrades} Trades):</td>
+                            <td colspan="11" style="text-align: left; color: #ffffff;">OVERALL SUMMARY (${totalTrades} Trades):</td>
                             <td class="${isTotalWin ? 'win' : 'loss'}">₹${totalPnL.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                             <td class="${totalROI > 0 ? 'win' : 'loss'}">${totalROI.toFixed(2)}%</td>
                             <td colspan="2" style="color: #60a5fa;">Accuracy: ${accuracy}%</td>

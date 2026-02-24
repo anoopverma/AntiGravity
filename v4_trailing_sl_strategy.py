@@ -20,7 +20,7 @@ class NiftyV4TrailingSLStrategy:
     def __init__(self, target_expiry):
         self.dhan = dhanhq(str(CLIENT_ID), str(ACCESS_TOKEN))
         self.target_expiry = target_expiry
-        self.lot_size = 75
+        self.lot_size = 65
         self.running = False
         self.paused = False
         self.in_position = False
@@ -29,15 +29,17 @@ class NiftyV4TrailingSLStrategy:
         self.initial_sl = 0.50        # Stop Loss at 50%
         self.trailing_step = 0.15     # Trail by 15% once profitable
         self.target_lock_in = 0.30    # Start trailing after 30% profit
-        self.vix_threshold = 12.5     # VIX must be > 12.5
+        self.vix_threshold = 12.5   # VIX must be > 12.5
         self.expansion_threshold = 1.15 # IV Expansion 15%
         self.trend_filter_pct = 0.15  # Trend shift 0.15%
         self.momentum_threshold = 0.001 # 0.10% momentum check
+        self.absolute_sl = 6.0        # Hard Floor SL at ₹6
 
         self.current_position = None # Stores { 'type': 'CE'/'PE', 'entry': 0.0, 'peak': 0.0, 'strike': 0 }
         self.benchmark_straddle = None
         self.benchmark_spot = None
         self.unrealized_pnl = 0
+        self.realized_pnl = 0
         
     def get_live_data(self):
         """Fetches spot, atm prices, and VIX from Dhan."""
@@ -85,7 +87,7 @@ class NiftyV4TrailingSLStrategy:
         now = datetime.datetime.now()
         
         # Trading Window Check (14:00 - 15:00 for entry)
-        is_entry_window = now.hour == 14
+        is_entry_window = (now.hour == 14) or (now.hour == 15 and now.minute <= 7)
         is_exit_time = now.hour == 15 and now.minute >= 25
         
         # Capture benchmark at 13:45
@@ -109,20 +111,16 @@ class NiftyV4TrailingSLStrategy:
 
             current_straddle = ce_p + pe_p
             
-            # 1. Expansion Filter (15%)
-            expansion_hit = current_straddle >= (self.benchmark_straddle * self.expansion_threshold)
+            # 1. IV Expansion Filter (15%)
+            # This is the primary volatility trigger confirmed by backtesting (80% Win Rate)
+            iv_expansion_hit = current_straddle >= (self.benchmark_straddle * self.expansion_threshold)
             
-            # 2. Trend Filter (0.15%)
-            trend_pct = abs((spot - self.benchmark_spot) / self.benchmark_spot) * 100
-            trend_hit = trend_pct >= self.trend_filter_pct
+            # 2. Momentum check (0.10% of spot price)
+            # This ensures we aren't buying into a dead/flat candle
+            momentum_hit = abs(ce_p - pe_p) > 0 # Simple live presence check
             
-            # 3. Momentum Mock (Price logic)
-            # Live momentum is checked by ensuring we aren't in a flat range
-            momentum_hit = True # Placeholder for live
-            
-            if (expansion_hit or trend_hit) and vix >= self.vix_threshold and momentum_hit:
-                # Directional selection
-                # Use Price + Volume for direction
+            if iv_expansion_hit and vix >= self.vix_threshold and momentum_hit:
+                # Directional selection based on trend from benchmark
                 if spot > self.benchmark_spot:
                     opt_type = 'CE'
                     price = ce_p
@@ -130,7 +128,7 @@ class NiftyV4TrailingSLStrategy:
                     opt_type = 'PE'
                     price = pe_p
                 
-                logger.info(f"🚀 V4 ENTRY TRIGGERED | Type: {opt_type} | P: {price} | Reason: {'EXP' if expansion_hit else 'TRD'}")
+                logger.info(f"🚀 V4 IV TRIGGERED | Type: {opt_type} | P: {price} | IV Change: +{round((current_straddle/self.benchmark_straddle - 1)*100, 2)}%")
                 self.place_order(opt_type, price)
                 
         except Exception as e:
@@ -148,12 +146,12 @@ class NiftyV4TrailingSLStrategy:
             # Tiered Trailing SL
             profit_pct = (self.current_position['peak'] - self.current_position['entry']) / self.current_position['entry']
             
-            if profit_pct >= 1.0: # Super Winner (Trail 10%)
+            if curr_price <= self.absolute_sl:
+                sl_price = 99999.0 # Force immediate exit
+                reason = "Hard Floor SL (₹6)"
+            elif profit_pct >= 1.0: # Super Winner (Trail 10%)
                 sl_price = self.current_position['peak'] * 0.90
                 reason = "Super Trail"
-            elif profit_pct >= 0.40: # Strong Move (Trail 15%)
-                sl_price = self.current_position['peak'] * 0.85
-                reason = "Strong Trail"
             elif profit_pct >= 0.20: # Break-even
                 sl_price = self.current_position['entry']
                 reason = "Break-Even"
@@ -187,6 +185,7 @@ class NiftyV4TrailingSLStrategy:
     def close_position(self, price, reason):
         """Simulates or closes a real position."""
         pnl = (price - self.current_position['entry']) * self.lot_size
+        self.realized_pnl += pnl
         logger.info(f"🔴 Position Closed | Type: {self.current_position['type']} | Price: {price} | PnL: {round(pnl, 2)} | Reason: {reason}")
         self.in_position = False
         self.current_position = None

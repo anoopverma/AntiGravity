@@ -37,7 +37,7 @@ class NiftyTuesdayDhanBacktester:
         self.initial_capital = 500000
         self.current_capital = self.initial_capital
         self.margin_per_lot = 120000
-        self.lot_size = 75 # Based on latest Nifty lots
+        self.lot_size = 65 # Updated based on user request
         self.results = []
         self.cached_data = {} # Cache fetched data to avoid redundant API calls
         
@@ -117,9 +117,89 @@ class NiftyTuesdayDhanBacktester:
             except Exception: break
         return self.fetch_yf_5min_fallback(date_str)
 
-    def run_v4_backtest(self, vix_threshold=12.5, target_lock_in=0.30, trailing_step=0.15, initial_sl=0.50, expansion_threshold=1.15, trend_filter_pct=0.15):
-        tuesdays = self.get_last_n_tuesdays(12)
-        logger.info(f"Starting V4 Trailing SL Strategy Backtest (Enhanced) - Last {len(tuesdays)} Weeks")
+    def calculate_adx(self, df, period=14):
+        """Manual ADX calculation using Wilder's Smoothing."""
+        df = df.copy()
+        high = df['high']
+        low = df['low']
+        close = df['close']
+        
+        df['tr'] = np.maximum(high - low, 
+                              np.maximum(abs(high - close.shift(1)), 
+                                         abs(low - close.shift(1))))
+        
+        df['plus_dm'] = np.where((high - high.shift(1)) > (low.shift(1) - low), 
+                                 np.maximum(high - high.shift(1), 0), 0)
+        df['minus_dm'] = np.where((low.shift(1) - low) > (high - high.shift(1)), 
+                                  np.maximum(low.shift(1) - low, 0), 0)
+        
+        # Alpha = 1/N is Wilder's Smoothing
+        df['atr'] = df['tr'].ewm(alpha=1/period, adjust=False).mean()
+        df['plus_di'] = 100 * df['plus_dm'].ewm(alpha=1/period, adjust=False).mean() / df['atr']
+        df['minus_di'] = 100 * df['minus_dm'].ewm(alpha=1/period, adjust=False).mean() / df['atr']
+        
+        df['dx'] = 100 * abs(df['plus_di'] - df['minus_di']) / (df['plus_di'] + df['minus_di'])
+        df['adx'] = df['dx'].ewm(alpha=1/period, adjust=False).mean()
+        return df['adx'], df['plus_di'], df['minus_di']
+
+    def calculate_supertrend(self, df, period=10, multiplier=3):
+        """Manual Supertrend calculation based on ATR."""
+        df = df.copy()
+        high = df['high']
+        low = df['low']
+        close = df['close']
+        
+        # Calculate ATR
+        tr = np.maximum(high - low, 
+                        np.maximum(abs(high - close.shift(1)), 
+                                   abs(low - close.shift(1))))
+        atr = tr.ewm(alpha=1/period, adjust=False).mean()
+        
+        hl2 = (high + low) / 2
+        final_upperband = hl2 + (multiplier * atr)
+        final_lowerband = hl2 - (multiplier * atr)
+        
+        # Initialize Supertrend
+        supertrend = np.zeros(len(df))
+        direction = np.zeros(len(df)) # 1 for Long, -1 for Short
+        
+        for i in range(1, len(df)):
+            # Update bands
+            if close[i-1] > final_upperband[i-1]:
+                final_upperband[i] = final_upperband[i] # stays same
+            else:
+                final_upperband[i] = min(final_upperband[i], final_upperband[i-1])
+                
+            if close[i-1] < final_lowerband[i-1]:
+                final_lowerband[i] = final_lowerband[i]
+            else:
+                final_lowerband[i] = max(final_lowerband[i], final_lowerband[i-1])
+                
+            # Determine direction
+            if i == 1:
+                direction[i] = 1 if close[i] > final_upperband[i] else -1
+            else:
+                if direction[i-1] == 1:
+                    direction[i] = 1 if close[i] > final_lowerband[i] else -1
+                else:
+                    direction[i] = -1 if close[i] < final_upperband[i] else 1
+            
+            supertrend[i] = final_lowerband[i] if direction[i] == 1 else final_upperband[i]
+            
+        return pd.Series(direction, index=df.index)
+
+    def calculate_rsi(self, df, period=14):
+        """Manual RSI calculation using Wilder's Smoothing."""
+        delta = df['close'].diff()
+        gain = (delta.where(delta > 0, 0)).ewm(alpha=1/period, adjust=False).mean()
+        loss = (-delta.where(delta < 0, 0)).ewm(alpha=1/period, adjust=False).mean()
+        rs = gain / loss
+        rsi = 100 - (100 / (1 + rs))
+        return rsi
+
+    def run_v4_backtest(self, n_weeks=12, vix_threshold=12.7, target_lock_in=0.30, trailing_step=0.15, initial_sl=0.50, expansion_threshold=1.15, trend_filter_pct=0.15, use_supertrend=False, use_rsi=False):
+        tuesdays = self.get_last_n_tuesdays(n_weeks)
+        logger.info(f"Starting V4 Trailing SL Strategy Backtest (RSI: {use_rsi}) - Last {len(tuesdays)} Weeks")
         self.results = []
         self.current_capital = self.initial_capital
         current_vix = 13.0
@@ -131,6 +211,11 @@ class NiftyTuesdayDhanBacktester:
                 self.cached_data[date_str] = df
             
             if df is None or df.empty: continue
+            
+            # Pre-calculate indicator alignment
+            df['adx'], df['plus_di'], df['minus_di'] = self.calculate_adx(df)
+            df['st_dir'] = self.calculate_supertrend(df)
+            df['rsi'] = self.calculate_rsi(df)
             
             position = None
             benchmark_straddle = 0.0
@@ -149,7 +234,7 @@ class NiftyTuesdayDhanBacktester:
                     benchmark_straddle = self.estimate_option_price(spot_price, atm, dte, IMPLIED_VOL_ASSUMPTION, 'C') + \
                                          self.estimate_option_price(spot_price, atm, dte, IMPLIED_VOL_ASSUMPTION, 'P')
 
-                is_entry_window = (index.hour == 14) 
+                is_entry_window = (index.hour == 14) or (index.hour == 15 and index.minute <= 7)
                 
                 if benchmark_straddle > 0 and position is None and is_entry_window:
                     atm = round(benchmark_spot / 50) * 50
@@ -160,16 +245,33 @@ class NiftyTuesdayDhanBacktester:
                     trend_ok = abs(trend_pct) >= trend_filter_pct
                     momentum_ok = abs(row['high'] - row['low']) >= (spot_price * 0.001)
 
-                    if (curr_straddle >= (benchmark_straddle * expansion_threshold) or trend_ok) and current_vix >= vix_threshold and momentum_ok:
+                    # Gamma Movement (20% Expansion) check
+                    gamma_ok = curr_straddle >= (benchmark_straddle * expansion_threshold)
+
+                    if gamma_ok and current_vix >= vix_threshold and momentum_ok:
                         opt_type = 'C' if spot_price > benchmark_spot else 'P'
-                        strike = round(spot_price / 50) * 50
-                        entry_prem = self.estimate_option_price(spot_price, strike, dte, IMPLIED_VOL_ASSUMPTION, opt_type)
                         
-                        target_inv = self.initial_capital * 0.10
-                        qty = max(self.lot_size, int(target_inv // (max(1.0, entry_prem) * self.lot_size)) * self.lot_size)
+                        # Supertrend Alignment check
+                        st_ok = True
+                        if use_supertrend:
+                            st_ok = (opt_type == 'C' and row['st_dir'] == 1) or \
+                                    (opt_type == 'P' and row['st_dir'] == -1)
                         
-                        position = {'type': opt_type, 'strike': strike, 'entry': entry_prem, 'peak': entry_prem, 'qty': qty}
-                        entry_time = index
+                        # RSI Alignment check (Sensitve: 51/49)
+                        rsi_ok = True
+                        if use_rsi:
+                            rsi_ok = (opt_type == 'C' and row['rsi'] >= 51) or \
+                                     (opt_type == 'P' and row['rsi'] <= 49)
+
+                        if st_ok and rsi_ok:
+                            strike = round(spot_price / 50) * 50
+                            entry_prem = self.estimate_option_price(spot_price, strike, dte, IMPLIED_VOL_ASSUMPTION, opt_type)
+                            
+                            target_inv = self.initial_capital * 0.10
+                            qty = max(self.lot_size, int(target_inv // (max(1.0, entry_prem) * self.lot_size)) * self.lot_size)
+                            
+                            position = {'type': opt_type, 'strike': strike, 'entry': entry_prem, 'peak': entry_prem, 'qty': qty}
+                            entry_time = index
 
                 elif position:
                     curr_p = self.estimate_option_price(spot_price, position['strike'], dte, IMPLIED_VOL_ASSUMPTION, position['type'])
@@ -177,33 +279,61 @@ class NiftyTuesdayDhanBacktester:
                         
                     profit_pct = (position['peak'] - position['entry']) / position['entry']
                     
-                    if profit_pct >= 1.00: 
-                        sl = position['peak'] * 0.90
-                        reason = "Super Trail (10%)"
-                    elif profit_pct >= 0.40: 
-                        sl = position['peak'] * 0.85
-                        reason = "Strong Trail (15%)"
+                    exit_triggered = False
+                    exit_price = curr_p
+                    
+                    # Priority 1: Hard Floor SL (₹6)
+                    if curr_p <= 6.0:
+                        exit_triggered = True
+                        exit_price = 6.0
+                        reason = "Hard Floor SL (₹6)"
+                    # Priority 2: Super Trail
+                    elif profit_pct >= 1.00: 
+                        sl_val = position['peak'] * 0.90
+                        if curr_p <= sl_val:
+                            exit_triggered = True
+                            exit_price = sl_val
+                            reason = "Super Trail (10%)"
+                    # Priority 3: Break-Even
                     elif profit_pct >= 0.20: 
-                        sl = position['entry']
-                        reason = "Break-Even SL"
+                        sl_val = position['entry']
+                        if curr_p <= sl_val:
+                            exit_triggered = True
+                            exit_price = sl_val
+                            reason = "Break-Even SL"
+                    # Priority 4: Initial SL
                     else:
-                        sl = position['entry'] * (1 - initial_sl)
-                        reason = "Initial SL"
-                        
+                        sl_val = position['entry'] * (1 - initial_sl)
+                        if curr_p <= sl_val:
+                            exit_triggered = True
+                            exit_price = sl_val
+                            reason = "Initial SL"
+                    
+                    # Priority 5: Time Exit
                     time_exit = index.hour == 15 and index.minute >= 25
-                    if curr_p <= sl or time_exit:
-                        reason = "Time Exit" if time_exit else reason
-                        pnl = (curr_p - position['entry']) * position['qty']
+                    if not exit_triggered and time_exit:
+                        exit_triggered = True
+                        exit_price = curr_p
+                        reason = "Time Exit"
+                        
+                    if exit_triggered:
+                        buy_price_rounded = round(position['entry'], 2)
+                        sell_price_rounded = round(exit_price, 2)
+                        pnl = (sell_price_rounded - buy_price_rounded) * position['qty']
+                        
                         self.current_capital += pnl
                         self.results.append({
                             'Date': date_str,
                             'Entry_Time': entry_time.strftime("%H:%M:%S") if entry_time else "00:00:00",
                             'Exit_Time': index.strftime("%H:%M:%S"),
                             'Option_Type': position['type'],
-                            'Buy_Price': round(position['entry'], 2),
-                            'Sell_Price': round(curr_p, 2),
-                            'PnL_INR': round(pnl, 2),
-                            'ROI%': round(((curr_p - position['entry']) / position['entry']) * 100, 2),
+                            'Action': 'BUY',
+                            'Qty': position['qty'],
+                            'Buy_Price': buy_price_rounded,
+                            'Peak_Price': round(position['peak'], 2),
+                            'Sell_Price': sell_price_rounded,
+                            'PNL': round(pnl, 2),
+                            'ROI%': round(((sell_price_rounded - buy_price_rounded) / buy_price_rounded) * 100, 2),
                             'Reason': reason,
                             'Win': pnl > 0
                         })
@@ -211,14 +341,14 @@ class NiftyTuesdayDhanBacktester:
                         break
         
         self.print_summary_v4()
-        self.save_to_postgres(table_name="historical_backtests", strategy_name="V4_Trailing_SL")
+        self.save_to_postgres(table_name="historical_backtests", strategy_name="V4_IV15_48W")
 
     def print_summary_v4(self):
         if not self.results:
             print("\nNo Trades Executed.")
             return
         df = pd.DataFrame(self.results)
-        total_pnl = df['PnL_INR'].sum()
+        total_pnl = df['PNL'].sum()
         roi = (total_pnl / self.initial_capital) * 100
         print(f"\n=== V4 STRATEGY BACKTEST RESULTS ===\nTotal Return: {roi:.2f}% (₹{total_pnl:,.2f})\nTrades: {len(df)}\nWin Rate: {(df['Win'].sum()/len(df))*100:.2f}%\n")
         print(df.to_string(index=False))
@@ -238,4 +368,4 @@ class NiftyTuesdayDhanBacktester:
 
 if __name__ == "__main__":
     backtester = NiftyTuesdayDhanBacktester()
-    backtester.run_v4_backtest()
+    backtester.run_v4_backtest(n_weeks=48, use_rsi=False, expansion_threshold=1.15)
