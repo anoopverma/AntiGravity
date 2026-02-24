@@ -7,6 +7,8 @@ from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from dhanhq import dhanhq
 from scipy.stats import norm
+import sqlalchemy
+from sqlalchemy import create_engine
 from collections import deque
 
 # Configure logging
@@ -35,7 +37,7 @@ class NiftyTuesdayDhanBacktester:
         self.initial_capital = 500000
         self.current_capital = self.initial_capital
         self.margin_per_lot = 120000
-        self.lot_size = 25
+        self.lot_size = 75 # Based on latest Nifty lots
         self.results = []
         self.cached_data = {} # Cache fetched data to avoid redundant API calls
         
@@ -56,10 +58,9 @@ class NiftyTuesdayDhanBacktester:
     def get_last_n_tuesdays(self, n=12):
         """Get the date strings for the last N Tuesdays."""
         today = datetime.now()
-        # Find the most recent Tuesday
         offset = (today.weekday() - 1) % 7
         last_tuesday = today - timedelta(days=offset)
-        if today.weekday() < 1: # If it's earlier than Tuesday this week
+        if today.weekday() < 1: 
             last_tuesday = last_tuesday - timedelta(days=7)
         
         tuesdays = []
@@ -73,14 +74,11 @@ class NiftyTuesdayDhanBacktester:
         try:
             import yfinance as yf
             ticker = yf.Ticker("^NSEI")
-            # YF only allows 5m data for the last 60 days. 
-            # If date_str is older, this might fail or return empty.
             start_date = date_str
             end_date = (datetime.strptime(date_str, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
             df = ticker.history(start=start_date, end=end_date, interval="5m")
             if not df.empty:
                 df.columns = [c.lower() for c in df.columns]
-                # Ensure index is datetime and handled correctly
                 logger.info(f"Fallback: Fetched {len(df)} 5-min bars from YFinance for {date_str}")
                 return df
         except Exception as e:
@@ -88,11 +86,11 @@ class NiftyTuesdayDhanBacktester:
         return pd.DataFrame()
 
     def fetch_dhan_5min_data(self, date_str, retries=3):
-        """Fetch 1-min intraday data and resample to 5-min."""
+        """Fetch intraday data from Dhan."""
         for attempt in range(retries):
             try:
                 req = self.dhan.intraday_minute_data(
-                    security_id='13', # Nifty 50
+                    security_id='13', 
                     exchange_segment=self.dhan.INDEX,
                     instrument_type='INDEX',
                     from_date=date_str,
@@ -101,355 +99,29 @@ class NiftyTuesdayDhanBacktester:
                 
                 if req.get('status') == 'success' and req.get('data'):
                     df = pd.DataFrame(req['data'])
-                    if df.empty:
-                        return pd.DataFrame()
-                        
-                    # Handle different versions of Dhan API response keys
-                    time_col = None
-                    if 'timestamp' in df.columns:
-                        time_col = 'timestamp'
-                    elif 'start_Time' in df.columns:
-                        time_col = 'start_Time'
+                    if df.empty: return pd.DataFrame()
                     
-                    if time_col:
+                    time_col = 'timestamp' if 'timestamp' in df.columns else 'start_Time'
+                    if time_col in df.columns:
                         if time_col == 'timestamp':
                             df['datetime'] = pd.to_datetime(df[time_col], unit='s') + pd.Timedelta(hours=5, minutes=30)
                         else:
                             df['datetime'] = pd.to_datetime(df[time_col]) + pd.Timedelta(hours=5, minutes=30)
                         
-                        # Set index
                         df.set_index('datetime', inplace=True)
-                        
-                        df_5m = df.resample('5min').agg({
-                            'open': 'first',
-                            'high': 'max',
-                            'low': 'min',
-                            'close': 'last'
-                        }).dropna()
-                        
-                        logger.info(f"Fetched {len(df_5m)} 5-min bars for {date_str}. Range: {df_5m.index[0]} to {df_5m.index[-1]}")
+                        df_5m = df.resample('5min').agg({'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last'}).dropna()
                         return df_5m
                 elif req.get('remarks') and 'DH-904' in str(req.get('remarks')):
-                    logger.warning(f"Rate limited on {date_str}. Waiting 5s (Attempt {attempt+1}/{retries})")
                     time.sleep(5)
-                else:
-                    logger.warning(f"No Dhan data for {date_str} - {req.get('remarks')}. Trying fallback...")
-                    break
-            except Exception as e:
-                logger.error(f"Dhan API Error on {date_str}: {e}. Trying fallback...")
-                break
-        
-        # If Dhan failed, try YF
+                else: break
+            except Exception: break
         return self.fetch_yf_5min_fallback(date_str)
 
-    def run_sell_backtest(self, stop_loss_pct=None, target_pct=0.75, silent=False):
-        """Run backtest for the last 12 Tuesdays with Selling (Theta Decay) logic."""
+    def run_v4_backtest(self, vix_threshold=12.5, target_lock_in=0.30, trailing_step=0.15, initial_sl=0.50, expansion_threshold=1.15, trend_filter_pct=0.15):
         tuesdays = self.get_last_n_tuesdays(12)
-        if not silent:
-            logger.info(f"Starting 12-week Tuesday SELL Backtest (SL: {stop_loss_pct*100 if stop_loss_pct else 'None'}%, TGT: {target_pct*100}%)")
-        
+        logger.info(f"Starting V4 Trailing SL Strategy Backtest (Enhanced) - Last {len(tuesdays)} Weeks")
         self.results = []
         self.current_capital = self.initial_capital
-        
-        for date_str in tuesdays:
-            df = self.cached_data.get(date_str)
-            if df is None:
-                df = self.fetch_dhan_5min_data(date_str)
-                self.cached_data[date_str] = df
-            if df.empty: continue
-            
-            in_position = False
-            entry_time, entry_spot, entry_ce_strike, entry_pe_strike, entry_premium, entry_lots = None, 0, 0, 0, 0, 0
-            peak_pnl, trough_pnl = 0, 0
-            eod_time = df.index[-1].replace(hour=15, minute=30)
-            
-            for index, row in df.iterrows():
-                spot_price = row['close']
-                dte = (eod_time - index).total_seconds() / (365 * 24 * 3600)
-                
-                if in_position:
-                    curr_ce = self.estimate_option_price(spot_price, entry_ce_strike, dte, IMPLIED_VOL_ASSUMPTION, 'C')
-                    curr_pe = self.estimate_option_price(spot_price, entry_pe_strike, dte, IMPLIED_VOL_ASSUMPTION, 'P')
-                    curr_premium = curr_ce + curr_pe
-                    pnl_points = entry_premium - curr_premium
-                    peak_pnl, trough_pnl = max(peak_pnl, pnl_points), min(trough_pnl, pnl_points)
-                    
-                    if stop_loss_pct and curr_premium >= entry_premium * (1 + stop_loss_pct):
-                        self.record_trade(date_str, entry_time, index, entry_spot, spot_price, entry_ce_strike, entry_pe_strike, pnl_points, entry_lots, peak_pnl, trough_pnl, 'StopLoss', entry_premium, curr_premium, silent)
-                        in_position = False; break
-                    if target_pct and curr_premium <= entry_premium * (1 - target_pct):
-                        self.record_trade(date_str, entry_time, index, entry_spot, spot_price, entry_ce_strike, entry_pe_strike, pnl_points, entry_lots, peak_pnl, trough_pnl, 'Target', entry_premium, curr_premium, silent)
-                        in_position = False; break
-                    if index.hour == 15 and index.minute >= 15:
-                        self.record_trade(date_str, entry_time, index, entry_spot, spot_price, entry_ce_strike, entry_pe_strike, pnl_points, entry_lots, peak_pnl, trough_pnl, 'Time', entry_premium, curr_premium, silent)
-                        in_position = False; break
-                
-                if not in_position and index.hour == 13 and index.minute >= 30:
-                    in_position = True
-                    entry_time, entry_spot = index, spot_price
-                    entry_lots = max(1, int(self.current_capital // self.margin_per_lot))
-                    atm_strike = round(spot_price / 50) * 50
-                    entry_ce_strike, entry_pe_strike = atm_strike + 100, atm_strike - 100
-                    entry_premium = self.estimate_option_price(spot_price, entry_ce_strike, dte, IMPLIED_VOL_ASSUMPTION, 'C') + \
-                                    self.estimate_option_price(spot_price, entry_pe_strike, dte, IMPLIED_VOL_ASSUMPTION, 'P')
-                    peak_pnl, trough_pnl = 0, 0
-                    if not silent: logger.info(f"Sell Entered: {date_str} {index.time()} Spot: {entry_spot}")
-            time.sleep(0.1)
-        return self.get_summary_sell(stop_loss_pct, target_pct)
-
-    def run_buy_backtest(self, jump_trigger=0.40, stop_loss_pct=None, target_pct=None, silent=False):
-        """Run backtest for the last 12 Tuesdays with Buy Momentum logic."""
-        tuesdays = self.get_last_n_tuesdays(12)
-        if not silent:
-            logger.info(f"Starting 12-week Tuesday BUY Backtest (Trigger: {jump_trigger*100}%, SL: {stop_loss_pct*100 if stop_loss_pct else 'None'}%, TGT: {target_pct*100 if target_pct else 'EOD'}%)")
-        
-        self.results = []
-        self.current_capital = self.initial_capital
-        
-        for date_str in tuesdays:
-            df = self.cached_data.get(date_str)
-            if df is None:
-                df = self.fetch_dhan_5min_data(date_str)
-                self.cached_data[date_str] = df
-            if df.empty: continue
-            
-            in_position = False
-            baseline_premium = None
-            entry_time, entry_spot, entry_ce_strike, entry_pe_strike, entry_premium, entry_qty = None, 0, 0, 0, 0, 0
-            peak_pnl, trough_pnl = 0, 0
-            eod_time = df.index[-1].replace(hour=15, minute=30)
-            
-            for index, row in df.iterrows():
-                spot_price = row['close']
-                dte = (eod_time - index).total_seconds() / (365 * 24 * 3600)
-                
-                if in_position:
-                    curr_ce = self.estimate_option_price(spot_price, entry_ce_strike, dte, IMPLIED_VOL_ASSUMPTION, 'C')
-                    curr_pe = self.estimate_option_price(spot_price, entry_pe_strike, dte, IMPLIED_VOL_ASSUMPTION, 'P')
-                    curr_premium = curr_ce + curr_pe
-                    pnl_points = curr_premium - entry_premium
-                    peak_pnl, trough_pnl = max(peak_pnl, pnl_points), min(trough_pnl, pnl_points)
-                    
-                    if stop_loss_pct and curr_premium <= entry_premium * (1 - stop_loss_pct):
-                        self.record_trade(date_str, entry_time, index, entry_spot, spot_price, entry_ce_strike, entry_pe_strike, pnl_points, entry_qty // self.lot_size, peak_pnl, trough_pnl, 'StopLoss', entry_premium, curr_premium, silent)
-                        in_position = False; break
-                    if target_pct and curr_premium >= entry_premium * (1 + target_pct):
-                        self.record_trade(date_str, entry_time, index, entry_spot, spot_price, entry_ce_strike, entry_pe_strike, pnl_points, entry_qty // self.lot_size, peak_pnl, trough_pnl, 'Target', entry_premium, curr_premium, silent)
-                        in_position = False; break
-                    if index.hour == 15 and index.minute >= 15:
-                        self.record_trade(date_str, entry_time, index, entry_spot, spot_price, entry_ce_strike, entry_pe_strike, pnl_points, entry_qty // self.lot_size, peak_pnl, trough_pnl, 'Time', entry_premium, curr_premium, silent)
-                        in_position = False; break
-                
-                if index.hour == 13 and index.minute == 30 and baseline_premium is None:
-                    atm_strike = round(spot_price / 50) * 50
-                    entry_ce_strike, entry_pe_strike = atm_strike + 100, atm_strike - 100
-                    baseline_premium = self.estimate_option_price(spot_price, entry_ce_strike, dte, IMPLIED_VOL_ASSUMPTION, 'C') + \
-                                       self.estimate_option_price(spot_price, entry_pe_strike, dte, IMPLIED_VOL_ASSUMPTION, 'P')
-                    if not silent: logger.info(f"Baseline at 1:30 PM: {baseline_premium:.2f}")
-
-                if not in_position and baseline_premium and index.time() > datetime.strptime("13:30", "%H:%M").time():
-                    curr_premium = self.estimate_option_price(spot_price, entry_ce_strike, dte, IMPLIED_VOL_ASSUMPTION, 'C') + \
-                                   self.estimate_option_price(spot_price, entry_pe_strike, dte, IMPLIED_VOL_ASSUMPTION, 'P')
-                    if curr_premium >= baseline_premium * (1 + jump_trigger):
-                        in_position = True
-                        entry_time, entry_spot, entry_premium = index, spot_price, curr_premium
-                        entry_qty = max(self.lot_size, int(self.current_capital // (entry_premium * self.lot_size)) * self.lot_size)
-                        peak_pnl, trough_pnl = 0, 0
-                        if not silent: logger.info(f"Buy Triggered: {date_str} {index.time()} Prem: {entry_premium:.2f}")
-            time.sleep(0.1)
-        return self.get_summary_buy_optimized(jump_trigger, stop_loss_pct, target_pct)
-
-    def run_directional_buy_backtest(self, stop_loss_pct=0.30, target_pct=1.00, silent=False):
-        """Run directional buy backtest based on 1:30 PM movement."""
-        tuesdays = self.get_last_n_tuesdays(12)
-        if not silent:
-            logger.info("Starting 12-week Tuesday DIRECTIONAL BUY Backtest")
-        
-        self.results = []
-        self.current_capital = self.initial_capital
-        
-        for date_str in tuesdays:
-            df = self.cached_data.get(date_str)
-            if df is None:
-                df = self.fetch_dhan_5min_data(date_str)
-                self.cached_data[date_str] = df
-            if df.empty: continue
-            
-            baseline_spot = None
-            straddle_baseline = None
-            in_position = False
-            entry_time, entry_spot, entry_strike, entry_premium, entry_qty = None, 0, 0, 0, 0
-            peak_pnl, trough_pnl = 0, 0
-            eod_time = df.index[-1].replace(hour=15, minute=30)
-            
-            for index, row in df.iterrows():
-                spot_price = row['close']
-                dte = (eod_time - index).total_seconds() / (365 * 24 * 3600)
-                
-                # Setup Baseline at 1:30 PM
-                if index.hour == 13 and index.minute == 30:
-                    baseline_spot = spot_price
-                    atm_strike = round(spot_price / 50) * 50
-                    straddle_baseline = self.estimate_option_price(spot_price, atm_strike, dte, IMPLIED_VOL_ASSUMPTION, 'C') + \
-                                       self.estimate_option_price(spot_price, atm_strike, dte, IMPLIED_VOL_ASSUMPTION, 'P')
-                    if not silent: logger.info(f"1:30 PM Baseline - Spot: {baseline_spot}, Straddle: {straddle_baseline:.2f}")
-
-                if in_position:
-                    # Current price of the single directional option
-                    curr_p = self.estimate_option_price(spot_price, entry_strike, dte, IMPLIED_VOL_ASSUMPTION, entry_type)
-                    pnl_points = curr_p - entry_premium
-                    peak_pnl, trough_pnl = max(peak_pnl, pnl_points), min(trough_pnl, pnl_points)
-                    
-                    if stop_loss_pct and curr_p <= entry_premium * (1 - stop_loss_pct):
-                        self.record_trade(date_str, entry_time, index, entry_spot, spot_price, entry_strike, 0, pnl_points, entry_qty // self.lot_size, peak_pnl, trough_pnl, 'StopLoss', entry_premium, curr_p, silent)
-                        in_position = False; break
-                    if target_pct and curr_p >= entry_premium * (1 + target_pct):
-                        self.record_trade(date_str, entry_time, index, entry_spot, spot_price, entry_strike, 0, pnl_points, entry_qty // self.lot_size, peak_pnl, trough_pnl, 'Target', entry_premium, curr_p, silent)
-                        in_position = False; break
-                    if index.hour == 15 and index.minute >= 15:
-                        self.record_trade(date_str, entry_time, index, entry_spot, spot_price, entry_strike, 0, pnl_points, entry_qty // self.lot_size, peak_pnl, trough_pnl, 'Time', entry_premium, curr_p, silent)
-                        in_position = False; break
-
-                elif baseline_spot and index.time() > datetime.strptime("13:30", "%H:%M").time():
-                    # Directional Logic
-                    direction = 'UP' if spot_price > baseline_spot else 'DOWN'
-                    
-                    # Current Straddle at 1:30 PM ATM strikes
-                    # (Breakout of the volatility recorded at 1:30 PM)
-                    atm_strike_130 = round(baseline_spot / 50) * 50
-                    curr_straddle = self.estimate_option_price(spot_price, atm_strike_130, dte, IMPLIED_VOL_ASSUMPTION, 'C') + \
-                                    self.estimate_option_price(spot_price, atm_strike_130, dte, IMPLIED_VOL_ASSUMPTION, 'P')
-                    
-                    # Entry Condition: Current Straddle > 1:30 PM Straddle (Volatility Expansion)
-                    if curr_straddle > straddle_baseline:
-                        opt_type = 'C' if direction == 'UP' else 'P'
-                        
-                        # Selection: Find first strike > 9 rupees
-                        target_strike = None
-                        target_price = 0
-                        step = 50
-                        base = round(spot_price / 50) * 50
-                        
-                        if direction == 'UP':
-                            for s in range(base, base + 500, step):
-                                p = self.estimate_option_price(spot_price, s, dte, IMPLIED_VOL_ASSUMPTION, 'C')
-                                if p > 9:
-                                    target_strike, target_price = s, p; break
-                        else:
-                            for s in range(base, base - 500, -step):
-                                p = self.estimate_option_price(spot_price, s, dte, IMPLIED_VOL_ASSUMPTION, 'P')
-                                if p > 9:
-                                    target_strike, target_price = s, p; break
-                        
-                        if target_strike:
-                            in_position = True
-                            entry_time, entry_spot, entry_strike, entry_premium, entry_type = index, spot_price, target_strike, target_price, opt_type
-                            entry_qty = max(self.lot_size, int(self.current_capital // (entry_premium * self.lot_size)) * self.lot_size)
-                            if not silent: logger.info(f"Straddle Breakout! {direction} Buy: Strike {entry_strike} @ {entry_premium:.2f} (Straddle: {curr_straddle:.2f} > {straddle_baseline:.2f})")
-            
-            time.sleep(0.1)
-        return self.get_summary_directional(stop_loss_pct, target_pct)
-
-    def run_directional_optimization_sweep(self):
-        """Run a sweep over SL and Target combinations for Directional Buy Strategy."""
-        sl_values = [0.10, 0.20, 0.30, 0.50, None]
-        tgt_values = [0.50, 1.00, 2.00, 5.00, None]
-        
-        sweep_results = []
-        logger.info("Starting Directional Strategy Optimization Sweep...")
-        
-        for sl in sl_values:
-            for tgt in tgt_values:
-                summary = self.run_directional_buy_backtest(stop_loss_pct=sl, target_pct=tgt, silent=True)
-                if summary:
-                    sweep_results.append(summary)
-        
-        sweep_df = pd.DataFrame(sweep_results)
-        sweep_df = sweep_df.sort_values(by='ROI%', ascending=False)
-        
-        print("\n=== Directional Optimization Sweep Results (Sorted by ROI) ===")
-        print(sweep_df.to_string(index=False))
-        
-        summary_md = "\n\n### 🎯 Directional Strategy Optimization Sweep Results\n\n| SL | Target | Trades | PnL (INR) | ROI % | Accuracy |\n|---|---|---|---|---|---|---|\n"
-        for _, row in sweep_df.iterrows():
-            summary_md += f"| {row['SL']} | {row['TGT']} | {row['Trades']} | **₹{row['PnL']:,}** | {row['ROI%']}% | {row['Accuracy%']}% |\n"
-            
-        with open("/Users/anoop/.gemini/antigravity/brain/311c7cff-5d0e-40ca-b43a-de26854c129a/walkthrough.md", "a") as f:
-            f.write(summary_md)
-
-    def get_summary_directional(self, sl, tgt):
-        if not self.results: return None
-        df = pd.DataFrame(self.results)
-        pnl = df['PnL_INR'].sum()
-        roi = (pnl / self.initial_capital) * 100
-        return {
-            'SL': f"{int(sl*100)}%" if sl else "None",
-            'TGT': f"{int(tgt*100)}%" if tgt else "EOD",
-            'Trades': len(df),
-            'ROI%': round(roi, 2),
-            'PnL': round(pnl, 2),
-            'Accuracy%': round((df['Win'].sum()/len(df))*100, 2)
-        }
-
-    def get_summary_sell(self, sl, tgt):
-        if not self.results: return None
-        df = pd.DataFrame(self.results)
-        pnl = df['PnL_INR'].sum()
-        return {'SL': f"{int(sl*100)}%" if sl else "None", 'TGT': f"{int(tgt*100)}%", 'Trades': len(df), 'ROI%': round((pnl/self.initial_capital)*100, 2), 'PnL': round(pnl, 2), 'Accuracy%': round((df['Win'].sum()/len(df))*100, 2)}
-
-    def get_summary_buy_optimized(self, trigger, sl, tgt):
-        if not self.results:
-            return None
-        df = pd.DataFrame(self.results)
-        total_pnl = df['PnL_INR'].sum()
-        roi = (total_pnl / self.initial_capital) * 100
-        accuracy = (df['Win'].sum() / len(df)) * 100
-        return {
-            'Trigger': f"{int(trigger*100)}%",
-            'SL': f"{int(sl*100)}%" if sl else "None",
-            'TGT': f"{int(tgt*100)}%" if tgt else "EOD",
-            'Trades': len(df),
-            'ROI%': round(roi, 2),
-            'PnL': round(total_pnl, 2),
-            'Accuracy%': round(accuracy, 2)
-        }
-
-    def run_buy_optimization_sweep(self):
-        """Run a sweep over Jump Trigger, SL, and Target combinations for Buy Strategy."""
-        trigger_values = [0.20, 0.40, 0.60]
-        sl_values = [0.10, 0.20, 0.30, None]
-        tgt_values = [0.50, 1.00, 2.00, None]
-        
-        sweep_results = []
-        logger.info("Starting Buy Strategy Optimization Sweep...")
-        
-        for tr in trigger_values:
-            for sl in sl_values:
-                for tgt in tgt_values:
-                    summary = self.run_buy_backtest(jump_trigger=tr, stop_loss_pct=sl, target_pct=tgt, silent=True)
-                    if summary:
-                        sweep_results.append(summary)
-        
-        sweep_df = pd.DataFrame(sweep_results)
-        sweep_df = sweep_df.sort_values(by='ROI%', ascending=False)
-        
-        print("\n=== Buy Optimization Sweep Results (Sorted by ROI) ===")
-        print(sweep_df.to_string(index=False))
-        
-        summary_md = "\n\n### 🎯 Buy Strategy Optimization Sweep Results\n\n| Trigger | SL | Target | Trades | PnL (INR) | ROI % | Accuracy |\n|---|---|---|---|---|---|---|\n"
-        for _, row in sweep_df.iterrows():
-            summary_md += f"| {row['Trigger']} | {row['SL']} | {row['TGT']} | {row['Trades']} | **₹{row['PnL']:,}** | {row['ROI%']}% | {row['Accuracy%']}% |\n"
-            
-        with open("/Users/anoop/.gemini/antigravity/brain/311c7cff-5d0e-40ca-b43a-de26854c129a/walkthrough.md", "a") as f:
-            f.write(summary_md)
-
-    def run_v4_backtest(self, vix_threshold=12.5, target_lock_in=0.30, trailing_step=0.15, initial_sl=0.40, expansion_threshold=1.15, trend_filter_pct=0.15):
-        tuesdays = self.get_last_n_tuesdays(12)
-        logger.info(f"Starting V4 Trailing SL Strategy Backtest (Enhanced) - Last 12 Weeks")
-        self.results = []
-        self.current_capital = self.initial_capital
-        
-        # Simple VIX mock > 12.5 assumption for backtesting past history
         current_vix = 13.0
         
         for date_str in tuesdays:
@@ -457,225 +129,113 @@ class NiftyTuesdayDhanBacktester:
             if df is None:
                 df = self.fetch_dhan_5min_data(date_str)
                 self.cached_data[date_str] = df
-            if df.empty: continue
+            
+            if df is None or df.empty: continue
             
             position = None
-            benchmark_straddle = None
-            benchmark_spot = None
-            entry_time, entry_spot, entry_strike, entry_premium = None, 0, 0, 0
-            entry_qty = 0
+            benchmark_straddle = 0.0
+            benchmark_spot = 0.0
+            entry_time = None
+            
             eod_time = df.index[-1].replace(hour=15, minute=30)
             
-            atm_ce_145, atm_pe_145 = None, None
-            
             for index, row in df.iterrows():
-                spot_price = row['close']
+                spot_price = float(row['close'])
                 dte = (eod_time - index).total_seconds() / (365 * 24 * 3600)
                 
                 if index.hour == 13 and index.minute == 45:
                     benchmark_spot = spot_price
-                    atm_strike = round(spot_price / 50) * 50
-                    atm_ce_145 = atm_strike
-                    atm_pe_145 = atm_strike
-                    benchmark_straddle = self.estimate_option_price(spot_price, atm_ce_145, dte, IMPLIED_VOL_ASSUMPTION, 'C') + \
-                                         self.estimate_option_price(spot_price, atm_pe_145, dte, IMPLIED_VOL_ASSUMPTION, 'P')
+                    atm = round(spot_price / 50) * 50
+                    benchmark_straddle = self.estimate_option_price(spot_price, atm, dte, IMPLIED_VOL_ASSUMPTION, 'C') + \
+                                         self.estimate_option_price(spot_price, atm, dte, IMPLIED_VOL_ASSUMPTION, 'P')
 
-                if benchmark_straddle and position is None and index.time() > datetime.strptime("13:45", "%H:%M").time():
-                    curr_straddle = self.estimate_option_price(spot_price, atm_ce_145, dte, IMPLIED_VOL_ASSUMPTION, 'C') + \
-                                    self.estimate_option_price(spot_price, atm_pe_145, dte, IMPLIED_VOL_ASSUMPTION, 'P')
+                is_entry_window = (index.hour == 14) 
+                
+                if benchmark_straddle > 0 and position is None and is_entry_window:
+                    atm = round(benchmark_spot / 50) * 50
+                    curr_straddle = self.estimate_option_price(spot_price, atm, dte, IMPLIED_VOL_ASSUMPTION, 'C') + \
+                                    self.estimate_option_price(spot_price, atm, dte, IMPLIED_VOL_ASSUMPTION, 'P')
                                     
-                    # Trend Direction Filter
-                    pct_change_from_benchmark = ((spot_price - benchmark_spot) / benchmark_spot) * 100
-                    trend_confirmed = abs(pct_change_from_benchmark) >= trend_filter_pct
+                    trend_pct = ((spot_price - benchmark_spot) / benchmark_spot) * 100
+                    trend_ok = abs(trend_pct) >= trend_filter_pct
+                    momentum_ok = abs(row['high'] - row['low']) >= (spot_price * 0.001)
 
-                    # Only buy if IV genuinely spiked OR the market took a strong directional shift 
-                    if (curr_straddle >= (benchmark_straddle * expansion_threshold) or trend_confirmed) and current_vix >= vix_threshold:
+                    if (curr_straddle >= (benchmark_straddle * expansion_threshold) or trend_ok) and current_vix >= vix_threshold and momentum_ok:
                         opt_type = 'C' if spot_price > benchmark_spot else 'P'
-                        target_strike = round(spot_price / 50) * 50
-                        entry_premium = self.estimate_option_price(spot_price, target_strike, dte, IMPLIED_VOL_ASSUMPTION, opt_type)
+                        strike = round(spot_price / 50) * 50
+                        entry_prem = self.estimate_option_price(spot_price, strike, dte, IMPLIED_VOL_ASSUMPTION, opt_type)
                         
-                        # Fix 10% Position Sizing (Never bet 100% of account on options)
-                        target_investment = self.initial_capital * 0.10
-                        safe_premium = max(0.50, entry_premium) # Prevent division by zero and penny stocks
-                        qty = max(self.lot_size, int(target_investment // (safe_premium * self.lot_size)) * self.lot_size)
+                        target_inv = self.initial_capital * 0.10
+                        qty = max(self.lot_size, int(target_inv // (max(1.0, entry_prem) * self.lot_size)) * self.lot_size)
                         
-                        position = {
-                            'type': opt_type, 
-                            'strike': target_strike,
-                            'entry': entry_premium, 
-                            'peak': entry_premium,
-                            'qty': qty
-                        }
-                        
-                        entry_time, entry_spot = index, spot_price
+                        position = {'type': opt_type, 'strike': strike, 'entry': entry_prem, 'peak': entry_prem, 'qty': qty}
+                        entry_time = index
 
                 elif position:
-                    current_price = self.estimate_option_price(spot_price, position['strike'], dte, IMPLIED_VOL_ASSUMPTION, position['type'])
-                    
-                    if current_price > position['peak']:
-                        position['peak'] = current_price
+                    curr_p = self.estimate_option_price(spot_price, position['strike'], dte, IMPLIED_VOL_ASSUMPTION, position['type'])
+                    if curr_p > position['peak']: position['peak'] = curr_p
                         
-                    if position['peak'] >= position['entry'] * (1 + target_lock_in):
-                        current_sl = position['peak'] * (1 - trailing_step)
-                        reason = "Trailing SL"
+                    profit_pct = (position['peak'] - position['entry']) / position['entry']
+                    
+                    if profit_pct >= 1.00: 
+                        sl = position['peak'] * 0.90
+                        reason = "Super Trail (10%)"
+                    elif profit_pct >= 0.40: 
+                        sl = position['peak'] * 0.85
+                        reason = "Strong Trail (15%)"
+                    elif profit_pct >= 0.20: 
+                        sl = position['entry']
+                        reason = "Break-Even SL"
                     else:
-                        current_sl = position['entry'] * (1 - initial_sl)
+                        sl = position['entry'] * (1 - initial_sl)
                         reason = "Initial SL"
                         
                     time_exit = index.hour == 15 and index.minute >= 25
-                    
-                    if current_price <= current_sl or time_exit:
+                    if curr_p <= sl or time_exit:
                         reason = "Time Exit" if time_exit else reason
-                        pnl_points = current_price - position['entry']
-                        pnl_inr = pnl_points * position['qty']
-                        self.current_capital += pnl_inr
-                        
+                        pnl = (curr_p - position['entry']) * position['qty']
+                        self.current_capital += pnl
                         self.results.append({
                             'Date': date_str,
-                            'Entry_Time': entry_time.strftime("%H:%M:%S"),
+                            'Entry_Time': entry_time.strftime("%H:%M:%S") if entry_time else "00:00:00",
                             'Exit_Time': index.strftime("%H:%M:%S"),
                             'Option_Type': position['type'],
-                            'Action': "BUY",
-                            'Exit_Action': "SELL",
                             'Buy_Price': round(position['entry'], 2),
-                            'Peak_Price': round(position['peak'], 2),
-                            'Sell_Price': round(current_price, 2),
-                            'PnL_Points': round(pnl_points, 2),
-                            'Profit_Loss_INR': round(pnl_inr, 2),
-                            'ROI%': round((pnl_points / position['entry']) * 100, 2),
-                            'Reason': reason
+                            'Sell_Price': round(curr_p, 2),
+                            'PnL_INR': round(pnl, 2),
+                            'ROI%': round(((curr_p - position['entry']) / position['entry']) * 100, 2),
+                            'Reason': reason,
+                            'Win': pnl > 0
                         })
                         position = None
                         break
-
-            time.sleep(0.1)
         
         self.print_summary_v4()
         self.save_to_postgres(table_name="historical_backtests", strategy_name="V4_Trailing_SL")
 
     def print_summary_v4(self):
         if not self.results:
-            print("\nNo Trades Executed in this Period.")
+            print("\nNo Trades Executed.")
             return
-            
-        df = pd.DataFrame(self.results)
-        df['Win'] = df['Profit_Loss_INR'] > 0
-        total_pnl = df['Profit_Loss_INR'].sum()
-        roi = (total_pnl / self.initial_capital) * 100
-        
-        print("\n=== V4 STRATEGY 12-WEEK BACKTEST RESULTS ===")
-        print(f"Total Return: {roi:.2f}% (₹{total_pnl:,.2f})")
-        print(f"Total Trades: {len(df)}")
-        print(f"Win Rate: {(df['Win'].sum() / len(df)) * 100:.2f}%\n")
-        print(df.to_string(index=False))
-
-    def save_to_postgres(self, table_name="historical_backtests", strategy_name="Unknown"):
-        uri = os.getenv("POSTGRES_URI", "postgresql://postgres:postgres@localhost:5432/postgres")
-        if not self.results:
-            logger.warning("No results to save to database.")
-            return
-
-        try:
-            from sqlalchemy import create_engine
-            engine = create_engine(uri)
-            df = pd.DataFrame(self.results)
-            # Injecting strategy and execution metadata at the very front
-            df.insert(0, 'Run_Date', datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-            df.insert(1, 'Strategy_Name', strategy_name)
-            # Appending to a unified database table
-            df.to_sql(table_name, con=engine, if_exists='append', index=False)
-            logger.info(f"Successfully appended {len(df)} records to PostgreSQL table '{table_name}'")
-            print(f"-> DB SYNC: Data appended to unified Local PostgreSQL table ({table_name}) for analysis.")
-        except Exception as e:
-            logger.error(f"Failed to save to PostgreSQL: {e}")
-            print(f"-> DB SYNC ERROR: Is PostgreSQL running locally? Error: {e}")
-
-    def record_trade(self, date_str, entry_time, exit_time, entry_spot, exit_spot, ce_strike, pe_strike, pnl_points, lots, peak, trough, reason, entry_prem, exit_prem, silent=False):
-        pnl_inr = pnl_points * self.lot_size * lots
-        self.current_capital += pnl_inr
-        self.results.append({
-            'Date': date_str,
-            'Entry': entry_time.strftime("%H:%M"),
-            'Exit': exit_time.strftime("%H:%M"),
-            'Spot_Entry': round(entry_spot, 2),
-            'Spot_Exit': round(exit_spot, 2),
-            'Strikes': f"{ce_strike}/{pe_strike}",
-            'Entry_Price': round(entry_prem, 2),
-            'Exit_Price': round(exit_prem, 2),
-            'PnL_Points': round(pnl_points, 2),
-            'PnL_INR': round(pnl_inr, 2),
-            'Capital': round(self.current_capital, 2),
-            'Lots': lots,
-            'Reason': reason,
-            'Win': pnl_points > 0
-        })
-        logger.info(f"Trade Exited on {date_str} at {exit_time.time()} | Reason: {reason} | PnL: {pnl_inr:.2f}")
-
-    def get_summary(self, sl, tgt):
-        if not self.results:
-            return None
         df = pd.DataFrame(self.results)
         total_pnl = df['PnL_INR'].sum()
         roi = (total_pnl / self.initial_capital) * 100
-        accuracy = (df['Win'].sum() / len(df)) * 100
-        return {
-            'SL': f"{int(sl*100)}%" if sl is not None else "None",
-            'TGT': f"{int(tgt*100)}%",
-            'Trades': len(df),
-            'ROI%': round(roi, 2),
-            'PnL': round(total_pnl, 2),
-            'Accuracy%': round(accuracy, 2)
-        }
+        print(f"\n=== V4 STRATEGY BACKTEST RESULTS ===\nTotal Return: {roi:.2f}% (₹{total_pnl:,.2f})\nTrades: {len(df)}\nWin Rate: {(df['Win'].sum()/len(df))*100:.2f}%\n")
+        print(df.to_string(index=False))
 
-    def print_statistics_sell(self, sl=None, tgt=0.75):
+    def save_to_postgres(self, table_name="historical_backtests", strategy_name="Unknown"):
+        uri = os.getenv("POSTGRES_URI", "postgresql://postgres:Aidni%40%23123@localhost:5432/postgres")
         if not self.results: return
-        df = pd.DataFrame(self.results)
-        df['Profit%'] = (df['PnL_Points'] / df['Entry_Price']) * 100
-        roi = (df['PnL_INR'].sum() / self.initial_capital) * 100
-        print(f"\n--- SELLING STRATEGY RESULTS ---")
-        print(f"Total ROI: {roi:.2f}% | Accuracy: {(df['Win'].sum()/len(df))*100:.2f}%")
-        print(df[['Date', 'Entry_Price', 'Exit_Price', 'PnL_INR', 'Profit%', 'Reason']].to_string(index=False))
-
-    def print_statistics_directional(self):
-        if not self.results:
-            print("\n--- DIRECTIONAL BUY STRATEGY: No Trades Triggered ---")
-            return
-        df = pd.DataFrame(self.results)
-        df['Profit%'] = (df['PnL_Points'] / df['Entry_Price']) * 100
-        roi = (df['PnL_INR'].sum() / self.initial_capital) * 100
-        print(f"\n--- DIRECTIONAL BUY STRATEGY RESULTS ---")
-        print(f"Total ROI: {roi:.2f}% | Accuracy: {(df['Win'].sum()/len(df))*100:.2f}%")
-        print(df[['Date', 'Entry_Price', 'Exit_Price', 'PnL_INR', 'Profit%', 'Reason']].to_string(index=False))
-
-    def print_statistics_buy(self, trigger=0.40):
-        if not self.results: return
-        df = pd.DataFrame(self.results)
-        roi = (df['PnL_INR'].sum() / self.initial_capital) * 100
-        print(f"\n--- BUYING STRATEGY RESULTS ---")
-        print(f"Total ROI: {roi:.2f}% | Accuracy: {(df['Win'].sum()/len(df))*100:.2f}%")
-        print(df[['Date', 'Entry', 'Exit', 'PnL_INR', 'Reason']].to_string(index=False))
+        try:
+            engine = create_engine(uri)
+            df = pd.DataFrame(self.results)
+            df.insert(0, 'Run_Date', datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+            df.insert(1, 'Strategy_Name', strategy_name)
+            df.to_sql(table_name, con=engine, if_exists='replace', index=False)
+            print(f"-> DB SYNC: {strategy_name} results REPLACED in {table_name}.")
+        except Exception as e:
+            logger.error(f"DB Error: {e}")
 
 if __name__ == "__main__":
     backtester = NiftyTuesdayDhanBacktester()
-    
-    print("\n=== Nifty Tuesday Expiry Strategy Selection ===")
-    print("1. Optimal SELLING Strategy (75% Target)")
-    print("2. DIRECTIONAL BUY Strategy Matrix")
-    print("3. Momentum BUYING Strategy (40% Jump)")
-    print("5. V4 Trailing SL Strategy")
-    
-    choice = "5" 
-    
-    if choice == "1":
-        backtester.run_sell_backtest(stop_loss_pct=None, target_pct=0.75)
-        backtester.print_statistics_sell(sl=None, tgt=0.75)
-    elif choice == "2":
-        backtester.run_directional_buy_backtest(stop_loss_pct=0.30, target_pct=1.00)
-        backtester.print_statistics_directional()
-    elif choice == "3":
-        backtester.run_buy_backtest(jump_trigger=0.40)
-        backtester.print_statistics_buy(trigger=0.40)
-    elif choice == "4":
-        backtester.run_directional_optimization_sweep()
-    elif choice == "5":
-        backtester.run_v4_backtest()
+    backtester.run_v4_backtest()
