@@ -114,6 +114,106 @@ def index():
     return response
 
 
+# ── Dhan OAuth flow ───────────────────────────────────────────────────────────
+
+@app.route('/dhan/connect')
+@login_required
+def dhan_connect():
+    """Redirect user to Dhan login page to obtain a tokenId."""
+    import urllib.parse
+    client_id   = os.getenv("DHAN_CLIENT_ID", CLIENT_ID)
+    redirect_uri = urllib.parse.quote(request.host_url.rstrip('/') + '/dhan/callback', safe='')
+    dhan_login_url = (
+        f"https://api.dhan.co/partner/oauth/authorize"
+        f"?client_id={client_id}&redirect_uri={redirect_uri}&response_type=code"
+    )
+    return redirect(dhan_login_url)
+
+
+@app.route('/dhan/callback', methods=['GET', 'POST'])
+@login_required
+def dhan_callback():
+    """
+    Dhan redirects here after user login.
+    GET  → tokenId arrives as a query param; exchange it for access_token.
+    POST → manual exchange form submission.
+    """
+    from datetime import datetime as _dt
+    import requests as _req
+
+    token_id     = request.args.get('tokenId') or request.form.get('token_id', '')
+    access_token = request.args.get('access_token', '')   # some flows pass directly
+    error_msg    = None
+
+    # If access_token came directly, we're done
+    if access_token:
+        return render_template(
+            'dhan_callback.html',
+            status='success',
+            access_token=access_token,
+            client_id=os.getenv("DHAN_CLIENT_ID", CLIENT_ID),
+            connected_at=_dt.now().strftime('%d %b %Y, %I:%M %p'),
+        )
+
+    # Exchange tokenId → access_token via Dhan API
+    if token_id:
+        try:
+            resp = _req.post(
+                'https://api.dhan.co/partner/oauth/token',
+                json={
+                    'tokenId':      token_id,
+                    'clientId':     os.getenv("DHAN_CLIENT_ID", CLIENT_ID),
+                    'clientSecret': os.getenv("DHAN_CLIENT_SECRET", ""),
+                },
+                timeout=10,
+            )
+            data = resp.json()
+            if resp.ok and data.get('access_token'):
+                return render_template(
+                    'dhan_callback.html',
+                    status='success',
+                    access_token=data['access_token'],
+                    client_id=data.get('dhanClientId', os.getenv("DHAN_CLIENT_ID", CLIENT_ID)),
+                    connected_at=_dt.now().strftime('%d %b %Y, %I:%M %p'),
+                )
+            else:
+                # Show pending UI so user can try manually
+                return render_template(
+                    'dhan_callback.html',
+                    status='pending',
+                    token_id=token_id,
+                )
+        except Exception as e:
+            error_msg = str(e)
+
+    return render_template(
+        'dhan_callback.html',
+        status='error',
+        error_message=error_msg or "No tokenId or access_token received from Dhan.",
+    )
+
+
+@app.route('/dhan/save-token', methods=['POST'])
+@login_required
+def dhan_save_token():
+    """Hot-reload the Dhan client with a new access token (no restart needed)."""
+    global dhan
+    data = request.get_json(force=True)
+    new_token = data.get('access_token', '').strip()
+    if not new_token:
+        return jsonify({"status": "error", "message": "No token provided"}), 400
+    try:
+        from dhanhq import dhanhq as _DhanHQ
+        dhan = _DhanHQ(str(CLIENT_ID), new_token)
+        if strategy:
+            strategy.dhan = dhan          # update the live strategy instance too
+        logger.info("Dhan client hot-reloaded with new access token.")
+        return jsonify({"status": "success", "message": "Token saved and client reloaded."})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+
 @app.route('/api/status', methods=['GET'])
 def get_status():
     return jsonify({
