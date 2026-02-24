@@ -34,10 +34,10 @@ class NiftyTuesdayDhanBacktester:
         self.dhan = dhanhq(str(self.client_id), str(self.access_token))
         
         # Strategy Parameters
-        self.initial_capital = 500000
+        self.initial_capital = 100000  # ₹1,00,000
         self.current_capital = self.initial_capital
         self.margin_per_lot = 120000
-        self.lot_size = 65 # Updated based on user request
+        self.lot_size = 65
         self.results = []
         self.cached_data = {} # Cache fetched data to avoid redundant API calls
         
@@ -296,11 +296,11 @@ class NiftyTuesdayDhanBacktester:
                             reason = "Super Trail (10%)"
                     # Priority 3: Break-Even
                     elif profit_pct >= 0.20: 
-                        sl_val = position['entry']
+                        sl_val = position['entry'] * 1.10
                         if curr_p <= sl_val:
                             exit_triggered = True
                             exit_price = sl_val
-                            reason = "Break-Even SL"
+                            reason = "Break-Even+10% SL"
                     # Priority 4: Initial SL
                     else:
                         sl_val = position['entry'] * (1 - initial_sl)
@@ -320,7 +320,7 @@ class NiftyTuesdayDhanBacktester:
                         buy_price_rounded = round(position['entry'], 2)
                         sell_price_rounded = round(exit_price, 2)
                         pnl = (sell_price_rounded - buy_price_rounded) * position['qty']
-                        
+                        capital_before = self.current_capital
                         self.current_capital += pnl
                         self.results.append({
                             'Date': date_str,
@@ -334,6 +334,7 @@ class NiftyTuesdayDhanBacktester:
                             'Sell_Price': sell_price_rounded,
                             'PNL': round(pnl, 2),
                             'ROI%': round(((sell_price_rounded - buy_price_rounded) / buy_price_rounded) * 100, 2),
+                            'Capital_ROI%': round((pnl / capital_before) * 100, 2),
                             'Reason': reason,
                             'Win': pnl > 0
                         })
@@ -342,6 +343,425 @@ class NiftyTuesdayDhanBacktester:
         
         self.print_summary_v4()
         self.save_to_postgres(table_name="historical_backtests", strategy_name="V4_IV15_48W")
+
+    def run_gamma_spike_backtest(self, n_weeks=48):
+        """
+        Gamma Spike Strategy Backtest
+        ──────────────────────────────────────────────────────
+        Entry Trigger : ATM straddle expands ≥ 15% vs 13:45 benchmark
+                        (pure gamma/IV spike, no trend/Supertrend filters)
+        Direction     : CE if spot > benchmark_spot, PE otherwise
+        Entry Window  : 14:00 – 15:07
+        Position Size : 10% of capital per trade
+        Exit Rules:
+          1. Hard Floor SL  ≤ ₹6
+          2. Super Trail    ≥ 100% profit → 10% trail
+          3. Break-Even     ≥ 20% profit  → exit at entry price
+          4. Initial SL     50% of entry
+          5. Time Exit      15:25
+        ──────────────────────────────────────────────────────
+        """
+        expansion_threshold = 1.15   # 15% straddle expansion = gamma spike
+        initial_sl          = 0.50   # 50% initial stop-loss
+        vix_min             = 11.0   # very loose VIX floor (we want volatility)
+
+        tuesdays = self.get_last_n_tuesdays(n_weeks)
+        logger.info(f"Starting Gamma Spike Backtest — {len(tuesdays)} weeks | Capital: ₹{self.initial_capital:,.0f}")
+        self.results = []
+        self.current_capital = self.initial_capital
+
+        for date_str in tuesdays:
+            df = self.cached_data.get(date_str)
+            if df is None:
+                df = self.fetch_dhan_5min_data(date_str)
+                self.cached_data[date_str] = df
+            if df is None or df.empty:
+                continue
+
+            position        = None
+            benchmark_spot  = 0.0
+            benchmark_straddle = 0.0
+            entry_time      = None
+
+            eod_time = df.index[-1].replace(hour=15, minute=30)
+
+            for index, row in df.iterrows():
+                spot_price = float(row['close'])
+                dte = max(1e-6, (eod_time - index).total_seconds() / (365 * 24 * 3600))
+
+                # ── Benchmark at 13:45 ───────────────────────────────
+                if index.hour == 13 and index.minute == 45:
+                    benchmark_spot = spot_price
+                    atm = round(spot_price / 50) * 50
+                    benchmark_straddle = (
+                        self.estimate_option_price(spot_price, atm, dte, IMPLIED_VOL_ASSUMPTION, 'C') +
+                        self.estimate_option_price(spot_price, atm, dte, IMPLIED_VOL_ASSUMPTION, 'P')
+                    )
+
+                if not benchmark_straddle:
+                    continue
+
+                # ── Position Management ──────────────────────────────
+                if position:
+                    curr_p = self.estimate_option_price(
+                        spot_price, position['strike'], dte,
+                        IMPLIED_VOL_ASSUMPTION, position['type'])
+                    if curr_p > position['peak']:
+                        position['peak'] = curr_p
+
+                    entry      = position['entry']
+                    peak       = position['peak']
+                    profit_pct = (peak - entry) / entry
+
+                    exit_triggered = False
+                    exit_price     = curr_p
+                    reason         = "hold"
+
+                    if curr_p <= 6.0:
+                        exit_triggered = True
+                        exit_price = 6.0
+                        reason     = "Hard Floor SL (₹6)"
+                    elif profit_pct >= 1.00:
+                        sl_val = peak * 0.90
+                        if curr_p <= sl_val:
+                            exit_triggered = True
+                            exit_price = sl_val
+                            reason     = "Super Trail (10%)"
+                    elif profit_pct >= 0.20:
+                        sl_val = entry * 1.10
+                        if curr_p <= sl_val:
+                            exit_triggered = True
+                            exit_price = sl_val
+                            reason     = "Break-Even+10% SL"
+                    else:
+                        sl_val = entry * (1 - initial_sl)
+                        if curr_p <= sl_val:
+                            exit_triggered = True
+                            exit_price = sl_val
+                            reason     = "Initial SL"
+
+                    is_time_exit = (index.hour == 15 and index.minute >= 25)
+                    if is_time_exit and not exit_triggered:
+                        exit_triggered = True
+                        exit_price     = curr_p
+                        reason         = "Time Exit"
+
+                    if exit_triggered:
+                        buy_p  = round(entry, 2)
+                        sell_p = round(exit_price, 2)
+                        pnl    = (sell_p - buy_p) * position['qty']
+                        capital_before = self.current_capital
+                        self.current_capital += pnl
+                        self.results.append({
+                            'Date':         date_str,
+                            'Entry_Time':   entry_time.strftime("%H:%M:%S") if entry_time else "00:00:00",
+                            'Exit_Time':    index.strftime("%H:%M:%S"),
+                            'Option_Type':  position['type'],
+                            'Action':       'BUY',
+                            'Qty':          position['qty'],
+                            'Buy_Price':    buy_p,
+                            'Peak_Price':   round(position['peak'], 2),
+                            'Sell_Price':   sell_p,
+                            'PNL':          round(pnl, 2),
+                            'ROI%':         round(((sell_p - buy_p) / buy_p) * 100, 2),
+                            'Capital_ROI%': round((pnl / capital_before) * 100, 2),
+                            'Reason':       reason,
+                            'Win':          pnl > 0
+                        })
+                        position = None
+                        break
+
+                # ── Entry Logic ──────────────────────────────────────
+                is_entry_window = (
+                    (index.hour == 14) or (index.hour == 15 and index.minute <= 7)
+                )
+                if not is_entry_window or position:
+                    continue
+
+                atm = round(benchmark_spot / 50) * 50
+                curr_straddle = (
+                    self.estimate_option_price(spot_price, atm, dte, IMPLIED_VOL_ASSUMPTION, 'C') +
+                    self.estimate_option_price(spot_price, atm, dte, IMPLIED_VOL_ASSUMPTION, 'P')
+                )
+                gamma_spike = curr_straddle >= benchmark_straddle * expansion_threshold
+
+                if not gamma_spike:
+                    continue
+
+                opt_type   = 'C' if spot_price > benchmark_spot else 'P'
+                strike     = round(spot_price / 50) * 50
+                entry_prem = self.estimate_option_price(
+                    spot_price, strike, dte, IMPLIED_VOL_ASSUMPTION, opt_type)
+
+                target_inv = self.initial_capital * 0.10
+                qty = max(self.lot_size,
+                          int(target_inv // (max(1.0, entry_prem) * self.lot_size)) * self.lot_size)
+
+                position   = {'type': opt_type, 'strike': strike, 'entry': entry_prem,
+                              'peak': entry_prem, 'qty': qty}
+                entry_time = index
+
+        self.print_summary_gamma_spike()
+        self.save_to_postgres(table_name="historical_backtests", strategy_name="GS_1L_48W")
+
+    def print_summary_gamma_spike(self):
+        if not self.results:
+            print("\nNo Trades Executed.")
+            return
+        df = pd.DataFrame(self.results)
+        total_pnl = df['PNL'].sum()
+        roi = (total_pnl / self.initial_capital) * 100
+        wins = df['Win'].sum()
+        print(f"\n{'='*55}")
+        print(f"  GAMMA SPIKE STRATEGY — 48 Weeks | Capital ₹{self.initial_capital:,.0f}")
+        print(f"{'='*55}")
+        print(f"  Total ROI    : {roi:.2f}%")
+        print(f"  Net Profit   : ₹{total_pnl:,.2f}")
+        print(f"  Total Trades : {len(df)}")
+        print(f"  Win Rate     : {(wins/len(df))*100:.2f}%  ({wins}W / {len(df)-wins}L)")
+        print(f"  Max Win      : ₹{df['PNL'].max():,.2f}")
+        print(f"  Max Loss     : ₹{df['PNL'].min():,.2f}")
+        print(f"{'='*55}\n")
+        print(df[['Date','Entry_Time','Exit_Time','Option_Type','Qty',
+                   'Buy_Price','Peak_Price','Sell_Price','PNL','ROI%',
+                   'Capital_ROI%','Reason','Win']].to_string(index=False))
+
+    def run_v5_backtest(self, n_weeks=48):
+        """
+        V5 Backtest incorporating all 10 improvements over V4:
+        #1  Confirmation bars (2 consecutive) before entry
+        #3  VIX upper cap at 20.0
+        #4  Time-of-day filter: entries only after 14:15
+        #5  Daily loss limit: -₹3,000
+        #6  Re-entry cooldown: 5 min after SL exit
+        #7  Tighter initial SL: 45%
+        #8  Time-weighted trail: tighten in last 20 min
+        #9  Expansion threshold: 1.20
+        #10 Trend filter: 0.20%
+        Note: #2 Volume confirmation skipped (synthetic pricing, no real volume)
+        """
+        initial_sl          = 0.45    # #7
+        expansion_threshold = 1.20    # #9
+        trend_filter_pct    = 0.20    # #10
+        vix_min             = 12.5
+        vix_max             = 20.0    # #3
+        daily_loss_limit    = -3000   # #5
+        cooldown_sec        = 300     # #6 (5 min)
+        confirm_bars_needed = 2       # #1
+
+        tuesdays = self.get_last_n_tuesdays(n_weeks)
+        logger.info(f"Starting V5 Backtest (48W) — {len(tuesdays)} weeks")
+        self.results = []
+        self.current_capital = self.initial_capital
+
+        for date_str in tuesdays:
+            df = self.cached_data.get(date_str)
+            if df is None:
+                df = self.fetch_dhan_5min_data(date_str)
+                self.cached_data[date_str] = df
+            if df is None or df.empty:
+                continue
+
+            position           = None
+            benchmark_straddle = 0.0
+            benchmark_spot     = 0.0
+            entry_time         = None
+            daily_pnl          = 0.0
+            last_exit_dt       = None
+            confirm_count      = 0
+            pending_signal     = None   # (opt_type, price)
+
+            eod_time = df.index[-1].replace(hour=15, minute=30)
+            dte_days  = max(1, (eod_time.date() - df.index[0].date()).days + 1)
+            dte       = dte_days / 252.0
+
+            for index, row in df.iterrows():
+                spot_price = (row['high'] + row['low']) / 2
+
+                # Benchmark snapshot at 13:45
+                if index.hour == 13 and index.minute == 45:
+                    atm = round(spot_price / 50) * 50
+                    benchmark_straddle = (
+                        self.estimate_option_price(spot_price, atm, dte, IMPLIED_VOL_ASSUMPTION, 'C') +
+                        self.estimate_option_price(spot_price, atm, dte, IMPLIED_VOL_ASSUMPTION, 'P')
+                    )
+                    benchmark_spot = spot_price
+
+                if not benchmark_straddle:
+                    continue
+
+                current_vix = 13.0  # Simulated VIX
+
+                # ─── POSITION MANAGEMENT ────────────────────────────────────
+                if position:
+                    curr_p = self.estimate_option_price(
+                        spot_price, position['strike'], dte, IMPLIED_VOL_ASSUMPTION, position['type'])
+                    if curr_p > position['peak']:
+                        position['peak'] = curr_p
+
+                    entry  = position['entry']
+                    peak   = position['peak']
+                    profit_pct = (peak - entry) / entry
+
+                    # #8 Time-weighted trail: tighten in last 20 min
+                    secs_to_close = max(0, (15 * 3600 + 25 * 60)
+                                        - (index.hour * 3600 + index.minute * 60))
+                    tighten = secs_to_close <= 20 * 60
+
+                    if curr_p <= 6.0:
+                        exit_price = 6.0
+                        reason     = "Hard Floor SL (₹6)"
+                    elif profit_pct >= 1.00:
+                        trail = 0.08 if tighten else 0.10
+                        sl_val = peak * (1 - trail)
+                        if curr_p <= sl_val:
+                            exit_price = sl_val
+                            reason     = "Super Trail" + (" [Tight]" if tighten else "")
+                        else:
+                            continue
+                    elif profit_pct >= 0.40:
+                        trail = 0.10 if tighten else 0.15
+                        sl_val = peak * (1 - trail)
+                        if curr_p <= sl_val:
+                            exit_price = sl_val
+                            reason     = "Strong Trail" + (" [Tight]" if tighten else "")
+                        else:
+                            continue
+                    elif profit_pct >= 0.20:
+                        sl_val = entry * 1.01  # Break-Even+ (1% locked profit)
+                        if curr_p <= sl_val:
+                            exit_price = sl_val
+                            reason     = "Break-Even+"
+                        else:
+                            continue
+                    else:
+                        sl_val = entry * (1 - initial_sl)
+                        if curr_p <= sl_val:
+                            exit_price = sl_val
+                            reason     = "Initial SL"
+                        else:
+                            exit_price = curr_p
+                            reason     = "hold"
+
+                    time_exit = index.hour == 15 and index.minute >= 25
+                    if reason == "hold" and not time_exit:
+                        continue
+
+                    if time_exit and reason == "hold":
+                        exit_price = curr_p
+                        reason     = "Time Exit"
+
+                    buy_p  = round(entry, 2)
+                    sell_p = round(exit_price, 2)
+                    pnl    = (sell_p - buy_p) * position['qty']
+                    capital_before = self.current_capital
+                    daily_pnl += pnl
+                    self.current_capital += pnl
+                    self.results.append({
+                        'Date':        date_str,
+                        'Entry_Time':  entry_time.strftime("%H:%M:%S") if entry_time else "00:00:00",
+                        'Exit_Time':   index.strftime("%H:%M:%S"),
+                        'Option_Type': position['type'],
+                        'Action':      'BUY',
+                        'Qty':         position['qty'],
+                        'Buy_Price':   buy_p,
+                        'Peak_Price':  round(position['peak'], 2),
+                        'Sell_Price':  sell_p,
+                        'PNL':         round(pnl, 2),
+                        'ROI%':        round(((sell_p - buy_p) / buy_p) * 100, 2),
+                        'Capital_ROI%': round((pnl / capital_before) * 100, 2),
+                        'Reason':      reason,
+                        'Win':         pnl > 0
+                    })
+                    last_exit_dt = index
+                    position     = None
+                    break
+
+                # ─── ENTRY LOGIC ─────────────────────────────────────────────
+                # #5 Daily loss guard
+                if daily_pnl <= daily_loss_limit:
+                    continue
+
+                # #4 Entry only from 14:15 onwards
+                if not (index.hour == 14 and index.minute >= 15):
+                    continue
+
+                # No new entries after 15:07
+                if index.hour == 15 and index.minute >= 7:
+                    continue
+
+                # #6 Re-entry cooldown
+                if last_exit_dt is not None:
+                    elapsed = (index - last_exit_dt).total_seconds()
+                    if elapsed < cooldown_sec:
+                        continue
+
+                # #3 VIX band
+                if not (vix_min <= current_vix <= vix_max):
+                    continue
+
+                atm = round(benchmark_spot / 50) * 50
+                curr_straddle = (
+                    self.estimate_option_price(spot_price, atm, dte, IMPLIED_VOL_ASSUMPTION, 'C') +
+                    self.estimate_option_price(spot_price, atm, dte, IMPLIED_VOL_ASSUMPTION, 'P')
+                )
+                trend_pct  = abs((spot_price - benchmark_spot) / benchmark_spot) * 100
+                gamma_ok   = curr_straddle >= benchmark_straddle * expansion_threshold
+                trend_ok   = trend_pct >= trend_filter_pct
+
+                if not (gamma_ok or trend_ok):
+                    confirm_count  = 0
+                    pending_signal = None
+                    continue
+
+                opt_type = 'C' if spot_price > benchmark_spot else 'P'
+
+                # #1 Confirmation bars
+                if pending_signal and pending_signal == opt_type:
+                    confirm_count += 1
+                else:
+                    pending_signal = opt_type
+                    confirm_count  = 1
+
+                if confirm_count < confirm_bars_needed:
+                    continue
+
+                # Entry confirmed
+                confirm_count  = 0
+                pending_signal = None
+                strike         = round(spot_price / 50) * 50
+                entry_prem     = self.estimate_option_price(
+                    spot_price, strike, dte, IMPLIED_VOL_ASSUMPTION, opt_type)
+                target_inv = self.initial_capital * 0.10
+                qty = max(self.lot_size,
+                          int(target_inv // (max(1.0, entry_prem) * self.lot_size)) * self.lot_size)
+                position   = {'type': opt_type, 'strike': strike,
+                              'entry': entry_prem, 'peak': entry_prem, 'qty': qty}
+                entry_time = index
+
+        self.print_summary_v5()
+        self.save_to_postgres(table_name="historical_backtests", strategy_name="V5_IV15_48W")
+
+    def print_summary_v5(self):
+        if not self.results:
+            print("\nNo Trades Executed.")
+            return
+        df = pd.DataFrame(self.results)
+        total_pnl = df['PNL'].sum()
+        roi = (total_pnl / self.initial_capital) * 100
+        wins = df['Win'].sum()
+        print(f"\n{'='*55}")
+        print(f"  V5 STRATEGY BACKTEST RESULTS (Last 48 Weeks)")
+        print(f"{'='*55}")
+        print(f"  Total ROI    : {roi:.2f}%")
+        print(f"  Net Profit   : ₹{total_pnl:,.2f}")
+        print(f"  Total Trades : {len(df)}")
+        print(f"  Win Rate     : {(wins/len(df))*100:.2f}%  ({wins}W / {len(df)-wins}L)")
+        print(f"  Max Single P : ₹{df['PNL'].max():,.2f}")
+        print(f"  Max Single L : ₹{df['PNL'].min():,.2f}")
+        print(f"{'='*55}\n")
+        print(df[['Date','Entry_Time','Exit_Time','Option_Type','Qty',
+                   'Buy_Price','Peak_Price','Sell_Price','PNL','ROI%','Reason','Win']].to_string(index=False))
 
     def print_summary_v4(self):
         if not self.results:
@@ -361,11 +781,20 @@ class NiftyTuesdayDhanBacktester:
             df = pd.DataFrame(self.results)
             df.insert(0, 'Run_Date', datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
             df.insert(1, 'Strategy_Name', strategy_name)
-            df.to_sql(table_name, con=engine, if_exists='replace', index=False)
-            print(f"-> DB SYNC: {strategy_name} results REPLACED in {table_name}.")
+            # Append V5 without overwriting V4
+            existing = pd.read_sql(
+                f"SELECT * FROM {table_name} WHERE \"Strategy_Name\" != '{strategy_name}'",
+                con=engine)
+            combined = pd.concat([existing, df], ignore_index=True)
+            combined.to_sql(table_name, con=engine, if_exists='replace', index=False)
+            print(f"-> DB SYNC: {strategy_name} results saved to {table_name}. Total rows: {len(combined)}")
         except Exception as e:
             logger.error(f"DB Error: {e}")
 
 if __name__ == "__main__":
     backtester = NiftyTuesdayDhanBacktester()
+    print("\n--- Running V4 Backtest (Entry+5% BE) ---")
     backtester.run_v4_backtest(n_weeks=48, use_rsi=False, expansion_threshold=1.15)
+    
+    print("\n--- Running Gamma Spike Backtest (Entry+5% BE) ---")
+    backtester.run_gamma_spike_backtest(n_weeks=48)

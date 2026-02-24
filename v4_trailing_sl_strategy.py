@@ -152,9 +152,9 @@ class NiftyV4TrailingSLStrategy:
             elif profit_pct >= 1.0: # Super Winner (Trail 10%)
                 sl_price = self.current_position['peak'] * 0.90
                 reason = "Super Trail"
-            elif profit_pct >= 0.20: # Break-even
-                sl_price = self.current_position['entry']
-                reason = "Break-Even"
+            elif profit_pct >= 0.20: # Break-even + 10%
+                sl_price = self.current_position['entry'] * 1.10
+                reason = "Break-Even+10%"
             else: # Initial SL (50%)
                 sl_price = self.current_position['entry'] * (1 - self.initial_sl)
                 reason = "Initial SL"
