@@ -912,7 +912,15 @@
                 return v >= equityData[i - 1] ? '#3fb950' : '#f85149';
             });
 
-            if (_equityChart) { _equityChart.destroy(); }
+            // Update existing chart in-place to avoid flicker — only create once
+            if (_equityChart) {
+                _equityChart.data.labels = labels;
+                _equityChart.data.datasets[0].data = equityData;
+                _equityChart.data.datasets[0].pointBackgroundColor = pointColors;
+                _equityChart.data.datasets[0].backgroundColor = gradient;
+                _equityChart.update('none'); // 'none' = no animation on update
+                return;
+            }
 
             _equityChart = new Chart(ctx, {
                 type: 'line',
@@ -979,9 +987,8 @@
             });
         }
 
-        // Initialize
+        // Initialize — no auto-polling; user refreshes manually via the Refresh button
         fetchBacktests();
-        setInterval(fetchBacktests, 10000); 
     </script>
 </body>
 
