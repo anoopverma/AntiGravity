@@ -367,6 +367,50 @@ def run_backtest():
 
 
 
+@app.route('/api/delete-backtest', methods=['POST'])
+@login_required
+def delete_backtest():
+    """Delete database records for a specified strategy and date range."""
+    data = request.json or {}
+    strategy = data.get('strategy', 'ALL')
+    start_date = data.get('start_date')
+    end_date = data.get('end_date')
+
+    uri = os.getenv("POSTGRES_URI", "")
+    if not uri:
+        return jsonify({"status": "error", "message": "POSTGRES_URI not configured"}), 503
+
+    try:
+        from sqlalchemy import text
+        engine = create_engine(uri)
+        with engine.connect() as conn:
+            query = 'DELETE FROM historical_backtests WHERE 1=1'
+            params = {}
+
+            if strategy != 'ALL':
+                query += ' AND "Strategy_Name" = :strategy'
+                params['strategy'] = strategy
+            
+            if start_date:
+                query += ' AND "Date" >= :start_date'
+                params['start_date'] = start_date
+
+            if end_date:
+                query += ' AND "Date" <= :end_date'
+                params['end_date'] = end_date
+
+            result = conn.execute(text(query), params)
+            conn.commit()
+
+            return jsonify({
+                "status": "success", 
+                "message": f"Deleted {result.rowcount} record(s) from database."
+            })
+    except Exception as e:
+        logger.error(f"Error deleting backtest data: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
 @app.route('/api/test-strategy', methods=['POST'])
 def test_strategy():
     data = request.json or {}

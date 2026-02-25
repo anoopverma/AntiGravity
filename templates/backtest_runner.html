@@ -480,12 +480,18 @@
             <hr class="divider">
             <div style="display:flex;flex-direction:column;gap:0.8rem;">
                 <button class="btn-run" id="run-btn" onclick="testDhan()">
-                    ⚡ TEST DHAN
+                    ▶ DHAN BACK TEST
                 </button>
-                <button class="btn-run" style="background: linear-gradient(135deg, #e3b341, #da3633);"
-                    id="test-strat-btn" onclick="showStatistics()">
-                    📊 SHOW STATISTICS
-                </button>
+                <div style="display:flex; gap:0.5rem;">
+                    <button class="btn-run" style="flex:1; background: linear-gradient(135deg, #e3b341, #da3633);"
+                        id="test-strat-btn" onclick="showStatistics()">
+                        📊 SHOW STATISTICS
+                    </button>
+                    <button class="btn-run" style="flex:1; background: linear-gradient(135deg, #e74c3c, #c0392b);"
+                        id="del-db-btn" onclick="deleteDbData()">
+                        🗑️ DELETE DATA
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -747,7 +753,44 @@
             }
 
             btn.disabled = false;
-            btn.innerHTML = '⚡ TEST DHAN';
+            btn.innerHTML = '▶ DHAN BACK TEST';
+        }
+
+        async function deleteDbData() {
+            const btn = document.getElementById('del-db-btn');
+            const originalHtml = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = `<span class="spinner" style="margin-right:8px; display:inline-block; border: 2px solid white; border-top: 2px solid transparent; border-radius: 50%; width: 14px; height: 14px; animation: spin 1s linear infinite;"></span> Deleting...`;
+
+            const payload = {
+                strategy: document.getElementById('strategy-select').value,
+                start_date: document.getElementById('start-date').value,
+                end_date: document.getElementById('end-date').value,
+            };
+
+            log(`Attempting to delete database records for strategy: ${payload.strategy}`, 'log-warn');
+
+            try {
+                const resp = await fetch('/api/delete-backtest', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await resp.json();
+
+                if (resp.ok) {
+                    log(`✅ ${data.message}`, 'log-success');
+                    fetchBacktests();
+                } else {
+                    log(`❌ Delete Error: ${data.message}`, 'log-error');
+                }
+            } catch (e) {
+                log(`❌ Network Error: ${e.message}`, 'log-error');
+            }
+
+            btn.disabled = false;
+            btn.innerHTML = originalHtml;
         }
 
         function showStatistics() {
