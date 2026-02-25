@@ -244,6 +244,11 @@ def dhan_save_token():
 
 
 
+@app.route('/health', methods=['GET'])
+def health():
+    return jsonify({"status": "ok"}), 200
+
+
 @app.route('/api/status', methods=['GET'])
 def get_status():
     return jsonify({
@@ -322,6 +327,7 @@ def close_all_positions():
 
 
 @app.route('/api/positions', methods=['GET'])
+@login_required
 def get_positions():
     if not dhan:
         return jsonify({"status": "error", "message": "Dhan client not initialised"}), 503
@@ -352,6 +358,7 @@ def get_positions():
 
 
 @app.route('/api/backtests', methods=['GET'])
+@login_required
 def get_backtests():
     uri = os.getenv("POSTGRES_URI", "")
     if not uri:
