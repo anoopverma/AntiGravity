@@ -703,9 +703,18 @@
                         opt.textContent = rd;
                         rdSelect.appendChild(opt);
                     });
-                    if (dbRunDates.includes(currentRdVal)) {
+
+                    // On first load (currentRdVal = 'ALL'), auto-select latest run date
+                    if (dbRunDates.length > 0 && currentRdVal === 'ALL') {
+                        rdSelect.value = dbRunDates[0]; // dbRunDates is sorted desc, so [0] = latest
+                    } else if (dbRunDates.includes(currentRdVal)) {
                         rdSelect.value = currentRdVal;
                     }
+
+                    const latestRun = dbRunDates[0] || 'N/A';
+                    const totalRecords = data.data.length;
+                    const strategies = dbStrategies.join(', ') || 'All';
+                    log(`✅ Data fetched — ${totalRecords} records | Strategies: ${strategies} | Latest run: ${latestRun}`, 'log-info');
 
                 } else {
                     _allData = [];
@@ -898,7 +907,7 @@
         }
 
         function showStatistics() {
-            log('Fetching latest database statistics...', 'log-info');
+            log('📊 Fetching statistics from database...', 'log-info');
             fetchBacktests();
         }
 
@@ -1009,7 +1018,8 @@
             });
         }
 
-        // No auto-fetch on load — data is loaded only on explicit user action
+        // Auto-load latest run data on page load
+        fetchBacktests();
     </script>
 </body>
 
