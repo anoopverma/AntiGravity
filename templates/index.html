@@ -296,11 +296,38 @@
             </div>
         </div>
 
-        <div class="controls">
-            <button class="btn-start" onclick="handleAction('start')">▶ Run Strategy</button>
-            <button class="btn-pause" onclick="handleAction('pause')">⏸ Pause</button>
-            <button class="btn-pause" onclick="handleAction('resume')">⏯ Resume</button>
-            <button class="btn-exit" onclick="handleAction('stop')">🛑 STOP BOT</button>
+        <div class="card">
+            <div class="card-title">Select Strategies to Run</div>
+            <table class="pos-table" id="live-strategies-table" style="margin-bottom: 1.5rem;">
+                <thead>
+                    <tr>
+                        <th style="width: 50px;">Run?</th>
+                        <th>Strategy Name</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><input type="checkbox" class="strat-checkbox" value="v4_gamma" checked></td>
+                        <td style="font-weight:600; color: #4ade80;">V4 Gamma</td>
+                        <td style="color: var(--text-dim);">Nifty options straddle with 50% initial SL and 15% trailing
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><input type="checkbox" class="strat-checkbox" value="gamma_blast"></td>
+                        <td style="font-weight:600; color: #60a5fa;">Gamma Blast</td>
+                        <td style="color: var(--text-dim);">Aggressive gamma expansion trading based on straddle
+                            momentum</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="controls" style="margin-bottom: 0;">
+                <button class="btn-start" onclick="handleAction('start')">▶ Run Selected Strategies</button>
+                <button class="btn-pause" onclick="handleAction('pause')">⏸ Pause</button>
+                <button class="btn-pause" onclick="handleAction('resume')">⏯ Resume</button>
+                <button class="btn-exit" onclick="handleAction('stop')">🛑 STOP BOT</button>
+            </div>
         </div>
 
         <div class="card">
@@ -392,7 +419,23 @@
 
         async function handleAction(action) {
             try {
-                const res = await fetch(`/api/${action}`, { method: 'POST' });
+                let payload = {};
+                if (action === 'start') {
+                    const checkboxes = document.querySelectorAll('.strat-checkbox:checked');
+                    const selected = Array.from(checkboxes).map(cb => cb.value);
+                    if (selected.length === 0) {
+                        alert("Please select at least one strategy to run.");
+                        return;
+                    }
+                    payload = { strategies: selected };
+                }
+
+                const res = await fetch(`/api/${action}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: Object.keys(payload).length > 0 ? JSON.stringify(payload) : null
+                });
+
                 const data = await res.json();
                 addLog(data.message);
                 fetchStatus();

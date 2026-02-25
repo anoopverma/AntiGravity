@@ -156,15 +156,25 @@ def get_status():
 @app.route('/api/start', methods=['POST'])
 def start():
     global strategy_thread
+    data = request.get_json(silent=True) or {}
+    selected_strategies = data.get('strategies', [])
+    
     if not strategy:
         return jsonify({"status": "error", "message": "Strategy not initialised"}), 503
+        
+    if not selected_strategies:
+        return jsonify({"status": "error", "message": "No strategies selected"}), 400
+        
     if strategy_thread is None or not strategy_thread.is_alive():
         strategy.running = True
         strategy.paused  = False
+        strategy.active_strategies_list = selected_strategies
+        logger.info(f"Starting Engine with selected strategies: {selected_strategies}")
         strategy_thread  = threading.Thread(target=strategy_loop, daemon=True)
         strategy_thread.start()
-        return jsonify({"status": "success", "message": "Strategy Started"})
-    return jsonify({"status": "error", "message": "Strategy already running"}), 400
+        names = ", ".join(selected_strategies)
+        return jsonify({"status": "success", "message": f"Strategy Engine Started [{names}]"})
+    return jsonify({"status": "error", "message": "Engine already running"}), 400
 
 
 @app.route('/api/pause', methods=['POST'])
