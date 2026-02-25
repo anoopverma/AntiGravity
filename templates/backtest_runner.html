@@ -631,7 +631,7 @@
                     // Update Table
                     const selectedStrategy = currentVal;
                     let rows = data.data;
-                    if (selectedStrategy !== 'ALL' && selectedStrategy !== 'v4_gamma' && selectedStrategy !== 'gamma_blast' && selectedStrategy !== 'strangle_1yr') {
+                    if (selectedStrategy !== 'ALL') {
                         rows = rows.filter(r => r.Strategy_Name === selectedStrategy);
                     }
 
@@ -651,9 +651,10 @@
                         totalPnL += pnl;
                         if (isWin) winningTrades++;
 
-                        tr.className = isWin ? 'win' : 'loss';
+                        const rowColor = isWin ? '#4ade80' : '#f87171';
+                        tr.style.color = rowColor;
                         tr.innerHTML = `
-                            <td style="color:#8b949e;">${idx + 1}</td>
+                            <td>${idx + 1}</td>
                             <td>${row.Run_Date || '-'}</td>
                             <td>${row.Strategy_Name || '-'}</td>
                             <td>${row.Date || '-'}</td>
@@ -665,11 +666,11 @@
                             <td>₹${row.Buy_Price ?? 0}</td>
                             <td>₹${row.Peak_Price ?? 0}</td>
                             <td>₹${row.Sell_Price ?? 0}</td>
-                            <td class="${isWin ? 'win' : 'loss'}">₹${fmt(pnl)}</td>
-                            <td class="${isWin ? 'win' : 'loss'}">${roi.toFixed(2)}%</td>
-                            <td class="${isWin ? 'win' : 'loss'}" style="font-weight:600;">${(parseFloat(row['Capital_ROI%']) || 0).toFixed(2)}%</td>
+                            <td>₹${fmt(pnl)}</td>
+                            <td>${roi.toFixed(2)}%</td>
+                            <td style="font-weight:600;">${(parseFloat(row['Capital_ROI%']) || 0).toFixed(2)}%</td>
                             <td>${row.Reason || '-'}</td>
-                            <td class="${isWin ? 'win' : 'loss'}"><b>${isWin ? 'WIN' : 'LOSS'}</b></td>
+                            <td><b>${isWin ? 'WIN' : 'LOSS'}</b></td>
                         `;
                         tbody.appendChild(tr);
                     });
