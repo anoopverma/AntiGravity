@@ -322,13 +322,10 @@
                 </tbody>
             </table>
 
-            </table>
-            <div class="controls" style="margin-bottom: 2rem;">
-                <button class="btn-start" style="background:#dc2626;" onclick="handleAction('start', 'live')">▶ Start
-                    LIVE Selected</button>
-                <button class="btn-pause" onclick="handleAction('pause')">⏸ Pause</button>
-                <button class="btn-pause" onclick="handleAction('resume')">⏯ Resume</button>
-                <button class="btn-exit" onclick="handleAction('stop')">🛑 STOP BOT</button>
+            <div class="controls"
+                style="margin-bottom: 2rem; display: flex; align-items: center; justify-content: flex-start;">
+                <button class="btn-start" style="background:#dc2626; width: auto; padding: 0.6rem 1.5rem;"
+                    onclick="handleAction('start', 'live')">▶ Start LIVE Selected</button>
             </div>
 
             <div class="card-title" style="margin-top:2rem;">▶ Select Strategies for FORWARD Testing (Paper Trading)
@@ -357,12 +354,20 @@
                 </tbody>
             </table>
 
-            <div class="controls" style="margin-bottom: 0;">
-                <button class="btn-start" style="background:#2563eb;" onclick="handleAction('start', 'paper')">▶ Start
-                    PAPER Selected</button>
-                <button class="btn-pause" onclick="handleAction('pause')">⏸ Pause</button>
-                <button class="btn-pause" onclick="handleAction('resume')">⏯ Resume</button>
-                <button class="btn-exit" onclick="handleAction('stop')">🛑 STOP BOT</button>
+            <div class="controls"
+                style="margin-bottom: 2rem; display: flex; align-items: center; justify-content: flex-start;">
+                <button class="btn-start" style="background:#2563eb; width: auto; padding: 0.6rem 1.5rem;"
+                    onclick="handleAction('start', 'paper')">▶ Start PAPER Selected</button>
+            </div>
+
+            <div class="controls"
+                style="margin-bottom: 0; display: flex; justify-content: center; gap: 0.8rem; border-top: 1px solid var(--border); padding-top: 1.5rem;">
+                <span
+                    style="color:var(--text-dim); align-self: center; font-size: 0.85rem; font-weight:600; margin-right: 1rem;">GLOBAL
+                    CONTROLS</span>
+                <button class="btn-pause" onclick="handleAction('pause')">⏸ Pause All BOTS</button>
+                <button class="btn-pause" onclick="handleAction('resume')">⏯ Resume All BOTS</button>
+                <button class="btn-exit" onclick="handleAction('stop')">🛑 STOP ALL BOTS</button>
             </div>
 
             <div class="card">
