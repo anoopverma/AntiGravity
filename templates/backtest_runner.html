@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AntiGravity — Backtest Runner</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+    <style>
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        :root {
+            --bg-dark: #0f1115;
+            --bg-card: #1c1f26;
+            --bg-hover: #22262e;
+            --text-main: #f0f0f0;
+            --text-dim: #8b949e;
+            --accent: #238636;
+            --accent-h: #2ea043;
+            --danger: #da3633;
+            --warning: #e3b341;
+            --info: #1f6feb;
+            --border: #30363d;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-main);
+            min-height: 100vh;
+            padding: 2rem;
+        }
+
+        .header-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            max-width: 1100px;
+            margin: 0 auto 2rem;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo-icon {
+            width: 38px;
+            height: 38px;
+            background: linear-gradient(135deg, #238636, #1f6feb);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+        }
+
+        h1 {
+            font-size: 1.2rem;
+            font-weight: 600;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .nav-link {
+            padding: 0.4rem 0.9rem;
+            border-radius: 6px;
+            font-size: 0.82rem;
+            font-weight: 500;
+            text-decoration: none;
+            color: var(--text-dim);
+            transition: all 0.2s;
+            border: 1px solid transparent;
+        }
+
+        .nav-link:hover {
+            color: var(--text-main);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .nav-link.active {
+            color: var(--text-main);
+            border-color: var(--border);
+            background: var(--bg-card);
+        }
+
+        .main {
+            max-width: 1100px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 340px 1fr;
+            gap: 1.5rem;
+            align-items: start;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+        }
+
+        .card-title {
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--text-dim);
+            margin-bottom: 1.2rem;
+        }
+
+        /* ── Config Panel ── */
+        .form-group {
+            margin-bottom: 1.1rem;
+        }
+
+        label {
+            display: block;
+            font-size: 0.78rem;
+            font-weight: 500;
+            color: var(--text-dim);
+            margin-bottom: 0.4rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        select,
+        input[type="number"],
+        input[type="date"] {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 0.65rem 0.85rem;
+            color: var(--text-main);
+            font-family: inherit;
+            font-size: 0.9rem;
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            -webkit-appearance: none;
+        }
+
+        select {
+            cursor: pointer;
+        }
+
+        select:focus,
+        input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(35, 134, 54, 0.15);
+        }
+
+        select option {
+            background: #1c1f26;
+        }
+
+        .strategy-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            font-size: 0.72rem;
+            padding: 0.2rem 0.6rem;
+            border-radius: 20px;
+            font-weight: 600;
+            margin-top: 0.4rem;
+        }
+
+        .badge-v4 {
+            background: rgba(35, 134, 54, 0.15);
+            color: #4ade80;
+            border: 1px solid rgba(35, 134, 54, 0.3);
+        }
+
+        .badge-gamma {
+            background: rgba(31, 111, 235, 0.15);
+            color: #60a5fa;
+            border: 1px solid rgba(31, 111, 235, 0.3);
+        }
+
+        .badge-stg {
+            background: rgba(227, 179, 65, 0.15);
+            color: #fcd34d;
+            border: 1px solid rgba(227, 179, 65, 0.3);
+        }
+
+        .strategy-desc {
+            font-size: 0.78rem;
+            color: var(--text-dim);
+            margin-top: 0.5rem;
+            line-height: 1.5;
+        }
+
+        .divider {
+            border: none;
+            border-top: 1px solid var(--border);
+            margin: 1.2rem 0;
+        }
+
+        .btn-run {
+            width: 100%;
+            padding: 0.8rem;
+            background: linear-gradient(135deg, #238636, #1f6feb);
+            border: none;
+            border-radius: 8px;
+            color: #fff;
+            font-family: inherit;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 4px 16px rgba(35, 134, 54, 0.25);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .btn-run:hover:not(:disabled) {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+
+        .btn-run:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* ── Results Panel ── */
+        .results-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--text-dim);
+        }
+
+        .status-dot.running {
+            background: var(--warning);
+            box-shadow: 0 0 8px var(--warning);
+            animation: pulse 1s infinite;
+        }
+
+        .status-dot.done {
+            background: var(--accent);
+            box-shadow: 0 0 8px var(--accent);
+        }
+
+        .status-dot.error {
+            background: var(--danger);
+            box-shadow: 0 0 8px var(--danger);
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1
+            }
+
+            50% {
+                opacity: 0.4
+            }
+        }
+
+        .log-box {
+            background: #0a0c0f;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            color: #adbac7;
+            height: 280px;
+            overflow-y: auto;
+            line-height: 1.7;
+            white-space: pre-wrap;
+        }
+
+        .log-box .log-info {
+            color: #adbac7;
+        }
+
+        .log-box .log-success {
+            color: #4ade80;
+        }
+
+        .log-box .log-error {
+            color: #f87171;
+        }
+
+        .log-box .log-warn {
+            color: #fcd34d;
+        }
+
+        /* ── Summary Cards ── */
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+            margin-top: 1.2rem;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: center;
+        }
+
+        .stat-label {
+            font-size: 0.68rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-dim);
+            margin-bottom: 0.3rem;
+        }
+
+        .stat-value {
+            font-size: 1.3rem;
+            font-weight: 700;
+        }
+
+        .stat-value.positive {
+            color: #4ade80;
+        }
+
+        .stat-value.negative {
+            color: #f87171;
+        }
+
+        .stat-value.neutral {
+            color: var(--text-main);
+        }
+
+        /* ── History Table ── */
+        .history-section {
+            margin-top: 1.5rem;
+        }
+
+        .history-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 0.8rem;
+        }
+
+        .btn-sm {
+            padding: 0.3rem 0.75rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-family: inherit;
+            cursor: pointer;
+            border: 1px solid var(--border);
+            background: transparent;
+            color: var(--text-dim);
+            transition: all 0.2s;
+        }
+
+        .btn-sm:hover {
+            color: var(--text-main);
+            border-color: var(--text-dim);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.8rem;
+        }
+
+        th {
+            text-align: left;
+            color: var(--text-dim);
+            font-weight: 500;
+            padding: 0.5rem 0.75rem;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        td {
+            padding: 0.6rem 0.75rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+            vertical-align: middle;
+        }
+
+        tr:hover td {
+            background: var(--bg-hover);
+        }
+
+        .win-tag {
+            color: #4ade80;
+            font-weight: 600;
+        }
+
+        .loss-tag {
+            color: #f87171;
+            font-weight: 600;
+        }
+
+        .table-wrap {
+            overflow-x: auto;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-dim);
+            font-size: 0.85rem;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="header-bar">
+        <div class="header-left">
+            <div class="logo-icon">⚡</div>
+            <h1>AntiGravity — Backtest Runner</h1>
+        </div>
+        <nav class="nav-links">
+            <a href="/" class="nav-link">Dashboard</a>
+            <a href="/backtest" class="nav-link active">Backtests</a>
+            <a href="/logout" class="nav-link">Sign Out →</a>
+        </nav>
+    </div>
+
+    <div class="main">
+
+        <!-- Config Panel -->
+        <div class="card">
+            <div class="card-title">⚙ Configure Run</div>
+
+            <div class="form-group">
+                <label>Strategy</label>
+                <select id="strategy-select" onchange="onStrategyChange()">
+                    <option value="v4_trailing_sl">V4 Trailing Stop-Loss</option>
+                    <option value="gamma_spike">Gamma Spike</option>
+                    <option value="strangle_1yr">1-Year Strangle</option>
+                </select>
+                <div id="strategy-meta" style="margin-top:0.6rem"></div>
+            </div>
+
+            <div class="form-group">
+                <label>Start Date</label>
+                <input type="date" id="start-date" value="2025-01-01">
+            </div>
+            <div class="form-group">
+                <label>End Date</label>
+                <input type="date" id="end-date" value="2025-12-31">
+            </div>
+            <div class="form-group">
+                <label>Initial Capital (₹)</label>
+                <input type="number" id="capital" value="500000" step="50000" min="100000">
+            </div>
+
+            <hr class="divider">
+            <button class="btn-run" id="run-btn" onclick="runBacktest()">
+                ▶ Run Backtest
+            </button>
+        </div>
+
+        <!-- Results Panel -->
+        <div>
+            <div class="card">
+                <div class="results-header">
+                    <div class="card-title" style="margin:0">📊 Live Output</div>
+                    <div style="display:flex;align-items:center;gap:0.5rem">
+                        <div class="status-dot" id="status-dot"></div>
+                        <span id="status-text" style="font-size:0.78rem;color:var(--text-dim)">Idle</span>
+                    </div>
+                </div>
+                <div class="log-box" id="log-box">Ready. Select a strategy and click Run Backtest.</div>
+
+                <div class="summary-grid" id="summary-grid" style="display:none">
+                    <div class="stat-card">
+                        <div class="stat-label">Total Trades</div>
+                        <div class="stat-value neutral" id="s-trades">—</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Win Rate</div>
+                        <div class="stat-value" id="s-winrate">—</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Net P&L</div>
+                        <div class="stat-value" id="s-pnl">—</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">ROI</div>
+                        <div class="stat-value" id="s-roi">—</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- History -->
+            <div class="card history-section">
+                <div class="history-header">
+                    <div class="card-title" style="margin:0">🗂 Saved Backtest Runs</div>
+                    <button class="btn-sm" onclick="loadHistory()">↻ Refresh</button>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Strategy</th>
+                                <th>Period</th>
+                                <th>Trades</th>
+                                <th>Win%</th>
+                                <th>Net P&L</th>
+                                <th>ROI</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-tbody">
+                            <tr>
+                                <td colspan="7" class="empty-state">Loading history…</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const STRATEGIES = {
+            v4_trailing_sl: {
+                label: 'V4 Trailing SL',
+                badge: 'badge-v4',
+                desc: 'Nifty options straddle with 50% initial SL and 15% trailing — Champion V4 Parameters.',
+            },
+            gamma_spike: {
+                label: 'Gamma Spike',
+                badge: 'badge-gamma',
+                desc: 'Trades Nifty options on gamma acceleration events near expiry.',
+            },
+            strangle_1yr: {
+                label: '1-Year Strangle',
+                badge: 'badge-stg',
+                desc: 'Systematic monthly Nifty strangle selling over a 1-year window.',
+            },
+        };
+
+        function onStrategyChange() {
+            const key = document.getElementById('strategy-select').value;
+            const s = STRATEGIES[key];
+            document.getElementById('strategy-meta').innerHTML = `
+        <span class="strategy-badge ${s.badge}">● ${s.label}</span>
+        <p class="strategy-desc">${s.desc}</p>
+    `;
+        }
+        onStrategyChange();
+
+        function log(msg, cls = 'log-info') {
+            const box = document.getElementById('log-box');
+            const ts = new Date().toLocaleTimeString('en-IN');
+            box.innerHTML += `<span class="${cls}">[${ts}] ${msg}\n</span>`;
+            box.scrollTop = box.scrollHeight;
+        }
+
+        function setStatus(state) {
+            const dot = document.getElementById('status-dot');
+            const text = document.getElementById('status-text');
+            dot.className = 'status-dot ' + (state === 'running' ? 'running' : state === 'done' ? 'done' : state === 'error' ? 'error' : '');
+            text.textContent = state === 'running' ? 'Running…' : state === 'done' ? 'Completed' : state === 'error' ? 'Failed' : 'Idle';
+        }
+
+        function showSummary(r) {
+            const grid = document.getElementById('summary-grid');
+            grid.style.display = 'grid';
+            const roi = ((r.net_pnl / r.capital) * 100).toFixed(1);
+            const win = ((r.wins / r.total_trades) * 100).toFixed(1);
+            document.getElementById('s-trades').textContent = r.total_trades;
+            document.getElementById('s-winrate').textContent = win + '%';
+            document.getElementById('s-winrate').className = 'stat-value ' + (parseFloat(win) >= 50 ? 'positive' : 'negative');
+            document.getElementById('s-pnl').textContent = '₹' + r.net_pnl.toLocaleString('en-IN');
+            document.getElementById('s-pnl').className = 'stat-value ' + (r.net_pnl >= 0 ? 'positive' : 'negative');
+            document.getElementById('s-roi').textContent = roi + '%';
+            document.getElementById('s-roi').className = 'stat-value ' + (parseFloat(roi) >= 0 ? 'positive' : 'negative');
+        }
+
+        async function runBacktest() {
+            const btn = document.getElementById('run-btn');
+            btn.disabled = true;
+            btn.innerHTML = '⏳ Running…';
+            document.getElementById('log-box').innerHTML = '';
+            document.getElementById('summary-grid').style.display = 'none';
+            setStatus('running');
+
+            const payload = {
+                strategy: document.getElementById('strategy-select').value,
+                start_date: document.getElementById('start-date').value,
+                end_date: document.getElementById('end-date').value,
+                capital: parseInt(document.getElementById('capital').value),
+            };
+
+            log(`Starting backtest: ${STRATEGIES[payload.strategy].label}`, 'log-info');
+            log(`Period: ${payload.start_date} → ${payload.end_date}`, 'log-info');
+            log(`Capital: ₹${payload.capital.toLocaleString('en-IN')}`, 'log-info');
+            log('Connecting to Dhan API…', 'log-info');
+
+            try {
+                const resp = await fetch('/api/run-backtest', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                const data = await resp.json();
+
+                if (data.status === 'success') {
+                    setStatus('done');
+                    log('✅ Backtest completed successfully!', 'log-success');
+                    log(`   Total Trades : ${data.total_trades}`, 'log-success');
+                    log(`   Wins / Losses: ${data.wins} / ${data.losses}`, 'log-success');
+                    log(`   Net P&L      : ₹${data.net_pnl.toLocaleString('en-IN')}`, 'log-success');
+                    log(`   ROI          : ${((data.net_pnl / data.capital) * 100).toFixed(1)}%`, 'log-success');
+                    log('💾 Results saved to database.', 'log-success');
+                    showSummary(data);
+                    loadHistory();
+                } else {
+                    setStatus('error');
+                    log('❌ Error: ' + data.message, 'log-error');
+                }
+            } catch (e) {
+                setStatus('error');
+                log('❌ Network error: ' + e.message, 'log-error');
+            }
+
+            btn.disabled = false;
+            btn.innerHTML = '▶ Run Backtest';
+        }
+
+        async function loadHistory() {
+            const tbody = document.getElementById('history-tbody');
+            tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Loading…</td></tr>';
+            try {
+                const resp = await fetch('/api/backtest-runs');
+                const data = await resp.json();
+                if (!data.data || data.data.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No backtest runs yet. Run your first backtest above!</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = data.data.map(r => {
+                    const pnl = parseFloat(r.net_pnl || 0);
+                    const roi = parseFloat(r.roi || 0);
+                    const wr = parseFloat(r.win_rate || 0);
+                    return `<tr>
+                <td>${r.run_date || r.created_at || '—'}</td>
+                <td>${r.strategy_name || '—'}</td>
+                <td><small>${r.start_date || ''} → ${r.end_date || ''}</small></td>
+                <td>${r.total_trades || 0}</td>
+                <td class="${wr >= 50 ? 'win-tag' : 'loss-tag'}">${wr.toFixed(1)}%</td>
+                <td class="${pnl >= 0 ? 'win-tag' : 'loss-tag'}">₹${pnl.toLocaleString('en-IN')}</td>
+                <td class="${roi >= 0 ? 'win-tag' : 'loss-tag'}">${roi.toFixed(1)}%</td>
+            </tr>`;
+                }).join('');
+            } catch (e) {
+                tbody.innerHTML = `<tr><td colspan="7" class="empty-state">Failed to load: ${e.message}</td></tr>`;
+            }
+        }
+
+        loadHistory();
+    </script>
+</body>
+
+</html>
