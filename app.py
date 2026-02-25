@@ -166,7 +166,6 @@ def dhan_connect():
 
 
 @app.route('/dhan/callback', methods=['GET', 'POST'])
-@login_required
 def dhan_callback():
     """
     Dhan redirects here after user login.
