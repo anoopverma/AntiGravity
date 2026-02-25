@@ -782,11 +782,17 @@ class NiftyTuesdayDhanBacktester:
             df = pd.DataFrame(self.results)
             df.insert(0, 'Run_Date', datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
             df.insert(1, 'Strategy_Name', strategy_name)
-            # Append V5 without overwriting V4
-            existing = pd.read_sql(
-                f"SELECT * FROM {table_name} WHERE \"Strategy_Name\" != '{strategy_name}'",
-                con=engine)
-            combined = pd.concat([existing, df], ignore_index=True)
+            
+            try:
+                # Try reading existing data to append without overwriting other strategies
+                existing = pd.read_sql(
+                    f"SELECT * FROM {table_name} WHERE \"Strategy_Name\" != '{strategy_name}'",
+                    con=engine)
+                combined = pd.concat([existing, df], ignore_index=True)
+            except Exception:
+                # Table does not exist yet (first run)
+                combined = df
+                
             combined.to_sql(table_name, con=engine, if_exists='replace', index=False)
             print(f"-> DB SYNC: {strategy_name} results saved to {table_name}. Total rows: {len(combined)}")
         except Exception as e:
@@ -794,8 +800,16 @@ class NiftyTuesdayDhanBacktester:
 
 if __name__ == "__main__":
     backtester = NiftyTuesdayDhanBacktester()
-    print("\n--- Running V4 Backtest (Entry+5% BE) ---")
-    backtester.run_v4_backtest(n_weeks=48, use_rsi=False, expansion_threshold=1.15)
+    strat = os.getenv("RUN_BACKTEST_STRATEGY", "ALL")
     
-    print("\n--- Running Gamma Spike Backtest (Entry+5% BE) ---")
-    backtester.run_gamma_blast_backtest(n_weeks=48)
+    if strat in ["v4_gamma", "ALL"]:
+        print("\n--- Running V4 Backtest (Entry+5% BE) ---")
+        backtester.run_v4_backtest(n_weeks=48, use_rsi=False, expansion_threshold=1.15)
+        
+    if strat in ["gamma_blast", "ALL"]:
+        print("\n--- Running Gamma Spike Backtest (Entry+5% BE) ---")
+        backtester.run_gamma_blast_backtest(n_weeks=48)
+        
+    if strat in ["V5_IV15_48W", "ALL"] and strat != "ALL":
+        print("\n--- Running V5 Backtest ---")
+        backtester.run_v5_backtest(n_weeks=48)

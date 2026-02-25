@@ -347,20 +347,12 @@ def test_strategy():
     start_date = data.get('start_date')
     end_date = data.get('end_date')
 
-    # Mapping frontend strategy keys to python files
-    scripts = []
-    if strategy == "ALL":
-        scripts = ["backtest_dhan_5min.py", "backtest_gamma.py", "backtest_v4.py"]
-    elif strategy == "v4_gamma":
-        scripts = ["backtest_v4.py"]
-    elif strategy == "gamma_blast":
-        scripts = ["backtest_gamma.py"]
-    else:
-        # DB strategies like V5_IV15_48W can be covered by the main dhan backtest 
-        scripts = ["backtest_dhan_5min.py"]
+    # Always use the main dhan script because it has the DB saving logic
+    scripts = ["backtest_dhan_5min.py"]
 
     import subprocess
     env = os.environ.copy()
+    env["RUN_BACKTEST_STRATEGY"] = strategy
     
     # Inject active credentials into subprocess environment
     if CLIENT_ID:
