@@ -782,6 +782,7 @@ class NiftyTuesdayDhanBacktester:
             df = pd.DataFrame(self.results)
             df.insert(0, 'Run_Date', datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
             df.insert(1, 'Strategy_Name', strategy_name)
+            df.insert(2, 'Run_Mode', 'Backtest')
             
             try:
                 # Try reading existing data to append without overwriting other strategies

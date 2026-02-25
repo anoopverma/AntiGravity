@@ -498,6 +498,13 @@
                 </div>
 
                 <div class="form-group">
+                    <label>Run Mode (Filter)</label>
+                    <select id="run-mode-select" onchange="applyRunDateFilter()">
+                        <option value="ALL">All Modes</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
                     <label>Run Date (Filter)</label>
                     <select id="run-date-select" onchange="applyRunDateFilter()">
                         <option value="ALL">All Runs</option>
@@ -581,6 +588,7 @@
                         <tr>
                             <th>#</th>
                             <th>Run Date</th>
+                            <th>Run Mode</th>
                             <th>Strategy</th>
                             <th>Trade Date</th>
                             <th>Type</th>
@@ -691,6 +699,20 @@
                     }
                     _allData = rows.slice();
 
+                    // Populate Run Mode dropdown (client-side)
+                    const rmSelect = document.getElementById('run-mode-select');
+                    const currentRmVal = rmSelect.value;
+                    const dbRunModes = [...new Set(_allData.map(r => r.Run_Mode).filter(Boolean))].sort();
+
+                    rmSelect.innerHTML = '<option value="ALL">All Modes</option>';
+                    dbRunModes.forEach(rm => {
+                        const opt = document.createElement('option');
+                        opt.value = rm;
+                        opt.textContent = rm;
+                        rmSelect.appendChild(opt);
+                    });
+                    if (dbRunModes.includes(currentRmVal)) { rmSelect.value = currentRmVal; }
+
                     // Populate Run Date dropdown (client-side, no onchange fire)
                     const rdSelect = document.getElementById('run-date-select');
                     const currentRdVal = rdSelect.value;
@@ -742,9 +764,13 @@
             tbody.innerHTML = '';
 
             const selectedStrategy = document.getElementById('strategy-select').value;
+            const selectedRunMode = document.getElementById('run-mode-select').value;
             const selectedRunDate = document.getElementById('run-date-select').value;
 
             let rows = _allData.slice();
+            if (selectedRunMode !== 'ALL') {
+                rows = rows.filter(r => r.Run_Mode === selectedRunMode);
+            }
             if (selectedRunDate !== 'ALL') {
                 rows = rows.filter(r => r.Run_Date === selectedRunDate);
             }
@@ -773,6 +799,7 @@
                 tr.innerHTML = `
                     <td>${idx + 1}</td>
                     <td>${row.Run_Date || '-'}</td>
+                    <td><span style="border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 2px 4px; font-size: 0.70rem;">${row.Run_Mode || 'Backtest'}</span></td>
                     <td>${row.Strategy_Name || '-'}</td>
                     <td>${row.Date || '-'}</td>
                     <td>${row.Option_Type || '-'}</td>

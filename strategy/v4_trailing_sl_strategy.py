@@ -205,7 +205,8 @@ class NiftyV4TrailingSLStrategy:
                 engine = create_engine(uri)
                 trade_record = {
                     'Run_Date': datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    'Strategy_Name': "v4_gamma" if self.paper_trade else "v4_gamma_LIVE",
+                    'Strategy_Name': "v4_gamma",
+                    'Run_Mode': 'Forward Test' if self.paper_trade else 'Live Trade',
                     'Date': datetime.datetime.now().strftime("%Y-%m-%d"),
                     'Entry_Time': old_position['time'].strftime("%H:%M:%S"),
                     'Exit_Time': datetime.datetime.now().strftime("%H:%M:%S"),
@@ -222,14 +223,14 @@ class NiftyV4TrailingSLStrategy:
                     'Win': pnl > 0
                 }
                 df = pd.DataFrame([trade_record])
-                table_name = "historical_forward_tests" if self.paper_trade else "live_trades"
+                table_name = "historical_backtests"
                 try:
                     existing = pd.read_sql(f"SELECT * FROM {table_name}", con=engine)
                     df = pd.concat([existing, df], ignore_index=True)
                 except Exception:
                     pass
                 df.to_sql(table_name, con=engine, if_exists='replace', index=False)
-                logger.info(f"Saved trade to DB table {table_name}")
+                logger.info(f"Saved trade to DB table {table_name} with mode {trade_record['Run_Mode']}")
         except Exception as e:
             logger.error(f"Failed to save trade to DB: {e}")
 
