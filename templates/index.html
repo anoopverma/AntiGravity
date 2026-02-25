@@ -297,7 +297,7 @@
         </div>
 
         <div class="card">
-            <div class="card-title">Select Strategies to Run</div>
+            <div class="card-title">▶ Select Strategies for LIVE Trading (Actual Money)</div>
             <table class="pos-table" id="live-strategies-table" style="margin-bottom: 1.5rem;">
                 <thead>
                     <tr>
@@ -308,14 +308,40 @@
                 </thead>
                 <tbody>
                     <tr>
-                        <td><input type="checkbox" class="strat-checkbox" value="v4_gamma" checked></td>
-                        <td style="font-weight:600; color: #4ade80;">V4 Gamma</td>
+                        <td><input type="checkbox" class="strat-checkbox-live" value="v4_gamma"></td>
+                        <td style="font-weight:600; color: #dc2626;">V4 Gamma [LIVE]</td>
                         <td style="color: var(--text-dim);">Nifty options straddle with 50% initial SL and 15% trailing
                         </td>
                     </tr>
                     <tr>
-                        <td><input type="checkbox" class="strat-checkbox" value="gamma_blast"></td>
-                        <td style="font-weight:600; color: #60a5fa;">Gamma Blast</td>
+                        <td><input type="checkbox" class="strat-checkbox-live" value="gamma_blast"></td>
+                        <td style="font-weight:600; color: #dc2626;">Gamma Blast [LIVE]</td>
+                        <td style="color: var(--text-dim);">Aggressive gamma expansion trading based on straddle
+                            momentum</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="card-title" style="margin-top:2rem;">▶ Select Strategies for FORWARD Testing (Paper Trading)
+            </div>
+            <table class="pos-table" id="paper-strategies-table" style="margin-bottom: 1.5rem;">
+                <thead>
+                    <tr>
+                        <th style="width: 50px;">Run?</th>
+                        <th>Strategy Name</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><input type="checkbox" class="strat-checkbox-paper" value="v4_gamma" checked></td>
+                        <td style="font-weight:600; color: #2563eb;">V4 Gamma [PAPER]</td>
+                        <td style="color: var(--text-dim);">Nifty options straddle with 50% initial SL and 15% trailing
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><input type="checkbox" class="strat-checkbox-paper" value="gamma_blast"></td>
+                        <td style="font-weight:600; color: #2563eb;">Gamma Blast [PAPER]</td>
                         <td style="color: var(--text-dim);">Aggressive gamma expansion trading based on straddle
                             momentum</td>
                     </tr>
@@ -323,163 +349,166 @@
             </table>
 
             <div class="controls" style="margin-bottom: 0;">
-                <button class="btn-start" style="background:#dc2626;" onclick="handleAction('start', 'live')">▶ Run Live
-                    (Actual Amount)</button>
-                <button class="btn-start" style="background:#2563eb;" onclick="handleAction('start', 'paper')">▶ Forward
-                    Test (Paper)</button>
-                <button class="btn-pause" onclick="handleAction('pause')">⏸ Pause</button>
-                <button class="btn-pause" onclick="handleAction('resume')">⏯ Resume</button>
-                <button class="btn-exit" onclick="handleAction('stop')">🛑 STOP BOT</button>
-            </div>
-        </div>
-
-        <div class="card">
-            <div class="card-title">System Logs</div>
-            <div class="log-container" id="logs">
-                <div class="log-entry"><span class="log-time">[System]</span> UI initialized.</div>
-            </div>
-        </div>
-
-        <!-- Current Positions -->
-        <div class="card">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
-                <div class="card-title" style="margin:0;">📌 Current Open Positions</div>
-                <div style="display:flex; align-items:center; gap:0.8rem;">
-                    <span id="pos-updated" style="font-size:0.75rem; color:var(--text-dim);"></span>
-                    <button id="pos-refresh-btn" onclick="togglePositionRefresh()" style="padding:0.35rem 0.9rem; font-size:0.78rem; font-weight:600;
-                               background: rgba(35,134,54,0.2); border:1px solid #238636;
-                               color:#4ade80; border-radius:6px; cursor:pointer; transition:all 0.2s;">
-                        ▶ Live Refresh
-                    </button>
-                    <button onclick="confirmCloseAll()" style="padding:0.35rem 0.9rem; font-size:0.78rem; font-weight:600;
-                               background: rgba(220,38,38,0.2); border:1px solid #dc2626;
-                               color:#f87171; border-radius:6px; cursor:pointer; transition:all 0.2s;">
-                        💀 Close All
-                    </button>
+                <div class="controls" style="margin-bottom: 0;">
+                    <button class="btn-start" style="background:#16a34a;" onclick="handleAction('start')">▶ Start
+                        Selected Strategies</button>
+                    <button class="btn-pause" onclick="handleAction('pause')">⏸ Pause</button>
+                    <button class="btn-pause" onclick="handleAction('resume')">⏯ Resume</button>
+                    <button class="btn-exit" onclick="handleAction('stop')">🛑 STOP BOT</button>
                 </div>
             </div>
-            <div class="table-container" style="max-height:260px;">
-                <table class="pos-table">
-                    <thead>
-                        <tr>
-                            <th>#</th>
-                            <th>Script</th>
-                            <th>Direction</th>
-                            <th>Qty</th>
-                            <th>Avg Price</th>
-                            <th>LTP</th>
-                            <th>Unrealized P&L</th>
-                        </tr>
-                    </thead>
-                    <tbody id="pos-tbody">
-                        <tr>
-                            <td colspan="7" style="text-align:center;color:var(--text-dim);padding:1.5rem;">No open
-                                positions</td>
-                        </tr>
-                    </tbody>
-                </table>
+
+            <div class="card">
+                <div class="card-title">System Logs</div>
+                <div class="log-container" id="logs">
+                    <div class="log-entry"><span class="log-time">[System]</span> UI initialized.</div>
+                </div>
             </div>
+
+            <!-- Current Positions -->
+            <div class="card">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+                    <div class="card-title" style="margin:0;">📌 Current Open Positions</div>
+                    <div style="display:flex; align-items:center; gap:0.8rem;">
+                        <span id="pos-updated" style="font-size:0.75rem; color:var(--text-dim);"></span>
+                        <button id="pos-refresh-btn" onclick="togglePositionRefresh()" style="padding:0.35rem 0.9rem; font-size:0.78rem; font-weight:600;
+                               background: rgba(35,134,54,0.2); border:1px solid #238636;
+                               color:#4ade80; border-radius:6px; cursor:pointer; transition:all 0.2s;">
+                            ▶ Live Refresh
+                        </button>
+                        <button onclick="confirmCloseAll()" style="padding:0.35rem 0.9rem; font-size:0.78rem; font-weight:600;
+                               background: rgba(220,38,38,0.2); border:1px solid #dc2626;
+                               color:#f87171; border-radius:6px; cursor:pointer; transition:all 0.2s;">
+                            💀 Close All
+                        </button>
+                    </div>
+                </div>
+                <div class="table-container" style="max-height:260px;">
+                    <table class="pos-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Script</th>
+                                <th>Direction</th>
+                                <th>Qty</th>
+                                <th>Avg Price</th>
+                                <th>LTP</th>
+                                <th>Unrealized P&L</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pos-tbody">
+                            <tr>
+                                <td colspan="7" style="text-align:center;color:var(--text-dim);padding:1.5rem;">No open
+                                    positions</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+
         </div>
 
+        <script>
+            async function fetchStatus() {
+                try {
+                    const res = await fetch('/api/status');
+                    const data = await res.json();
 
-    </div>
+                    const statusText = document.getElementById('strategy-status-text');
+                    const badgeContainer = document.getElementById('status-badge-container');
 
-    <script>
-        async function fetchStatus() {
-            try {
-                const res = await fetch('/api/status');
-                const data = await res.json();
+                    if (!data.running) {
+                        statusText.innerText = "Stopped";
+                        badgeContainer.innerHTML = '<span class="status-badge status-stopped">Offline</span>';
+                    } else if (data.paused) {
+                        statusText.innerText = data.active_names ? data.active_names + " (Paused)" : "Paused";
+                        badgeContainer.innerHTML = '<span class="status-badge status-paused">Standby</span>';
+                    } else {
+                        statusText.innerText = data.active_names || "Running";
+                        badgeContainer.innerHTML = '<span class="status-badge status-active">Monitoring Live</span>';
+                    }
 
-                const statusText = document.getElementById('strategy-status-text');
-                const badgeContainer = document.getElementById('status-badge-container');
+                    document.getElementById('position-text').innerText = data.in_position ? "Active" : "None";
 
-                if (!data.running) {
-                    statusText.innerText = "Stopped";
-                    badgeContainer.innerHTML = '<span class="status-badge status-stopped">Offline</span>';
-                } else if (data.paused) {
-                    statusText.innerText = data.active_names ? data.active_names + " (Paused)" : "Paused";
-                    badgeContainer.innerHTML = '<span class="status-badge status-paused">Standby</span>';
+                    const uPnl = data.unrealized_pnl || 0;
+                    const rPnl = data.realized_pnl || 0;
+                    const totalPnl = uPnl + rPnl;
+
+                    const pnlElement = document.getElementById('pnl-text');
+                    pnlElement.innerText = `₹${totalPnl.toLocaleString()}`;
+                    pnlElement.title = `Unrealized: ₹${uPnl.toLocaleString()} | Realized: ₹${rPnl.toLocaleString()}`;
+                    pnlElement.style.color = totalPnl >= 0 ? '#4ade80' : '#f87171';
+
+                } catch (err) {
+                    console.error("Status fetch failed", err);
+                }
+            }
+
+            async function handleAction(action) {
+                try {
+                    let payload = {};
+                    if (action === 'start') {
+                        const liveBoxes = document.querySelectorAll('.strat-checkbox-live:checked');
+                        const paperBoxes = document.querySelectorAll('.strat-checkbox-paper:checked');
+
+                        const liveSelected = Array.from(liveBoxes).map(cb => cb.value);
+                        const paperSelected = Array.from(paperBoxes).map(cb => cb.value);
+
+                        if (liveSelected.length === 0 && paperSelected.length === 0) {
+                            alert("Please select at least one strategy to run.");
+                            return;
+                        }
+                        if (liveSelected.length > 0) {
+                            const confirmed = confirm("⚠️ WARNING: You have selected LIVE mode for some strategies! This will execute real trades on Dhan with actual money. Proceed?");
+                            if (!confirmed) return;
+                        }
+                        payload = { live: liveSelected, paper: paperSelected };
+                    }
+
+                    const res = await fetch(`/api/${action}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: Object.keys(payload).length > 0 ? JSON.stringify(payload) : null
+                    });
+
+                    const data = await res.json();
+                    addLog(data.message);
+                    fetchStatus();
+                } catch (err) {
+                    addLog("Error executing action: " + action);
+                }
+            }
+
+            function addLog(msg) {
+                const logs = document.getElementById('logs');
+                const time = new Date().toLocaleTimeString();
+                logs.innerHTML += `<div class="log-entry"><span class="log-time">[${time}]</span> ${msg}</div>`;
+                logs.scrollTop = logs.scrollHeight;
+            }
+
+            function confirmCloseAll() {
+                const confirmed = confirm('⚠️ WARNING: This will close ALL open positions at MARKET price immediately. Are you absolutely sure?');
+                if (confirmed) {
+                    handleAction('close_all_positions');
                 } else {
-                    statusText.innerText = data.active_names || "Running";
-                    badgeContainer.innerHTML = '<span class="status-badge status-active">Monitoring Live</span>';
+                    addLog('Close All Positions cancelled by user.');
                 }
-
-                document.getElementById('position-text').innerText = data.in_position ? "Active" : "None";
-
-                const uPnl = data.unrealized_pnl || 0;
-                const rPnl = data.realized_pnl || 0;
-                const totalPnl = uPnl + rPnl;
-
-                const pnlElement = document.getElementById('pnl-text');
-                pnlElement.innerText = `₹${totalPnl.toLocaleString()}`;
-                pnlElement.title = `Unrealized: ₹${uPnl.toLocaleString()} | Realized: ₹${rPnl.toLocaleString()}`;
-                pnlElement.style.color = totalPnl >= 0 ? '#4ade80' : '#f87171';
-
-            } catch (err) {
-                console.error("Status fetch failed", err);
             }
-        }
 
-        async function handleAction(action, mode = 'paper') {
-            try {
-                let payload = {};
-                if (action === 'start') {
-                    const checkboxes = document.querySelectorAll('.strat-checkbox:checked');
-                    const selected = Array.from(checkboxes).map(cb => cb.value);
-                    if (selected.length === 0) {
-                        alert("Please select at least one strategy to run.");
-                        return;
-                    }
-                    if (mode === 'live') {
-                        const confirmed = confirm("⚠️ WARNING: You are starting LIVE mode with ACTUAL MONEY. This will execute real trades on Dhan. Proceed?");
-                        if (!confirmed) return;
-                    }
-                    payload = { strategies: selected, mode: mode };
-                }
+            async function fetchPositions() {
+                try {
+                    const res = await fetch('/api/positions');
+                    const data = await res.json();
+                    const tbody = document.getElementById('pos-tbody');
+                    document.getElementById('pos-updated').textContent = 'Updated: ' + new Date().toLocaleTimeString('en-IN');
 
-                const res = await fetch(`/api/${action}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: Object.keys(payload).length > 0 ? JSON.stringify(payload) : null
-                });
-
-                const data = await res.json();
-                addLog(data.message);
-                fetchStatus();
-            } catch (err) {
-                addLog("Error executing action: " + action);
-            }
-        }
-
-        function addLog(msg) {
-            const logs = document.getElementById('logs');
-            const time = new Date().toLocaleTimeString();
-            logs.innerHTML += `<div class="log-entry"><span class="log-time">[${time}]</span> ${msg}</div>`;
-            logs.scrollTop = logs.scrollHeight;
-        }
-
-        function confirmCloseAll() {
-            const confirmed = confirm('⚠️ WARNING: This will close ALL open positions at MARKET price immediately. Are you absolutely sure?');
-            if (confirmed) {
-                handleAction('close_all_positions');
-            } else {
-                addLog('Close All Positions cancelled by user.');
-            }
-        }
-
-        async function fetchPositions() {
-            try {
-                const res = await fetch('/api/positions');
-                const data = await res.json();
-                const tbody = document.getElementById('pos-tbody');
-                document.getElementById('pos-updated').textContent = 'Updated: ' + new Date().toLocaleTimeString('en-IN');
-
-                if (data.status === 'success' && data.data.length > 0) {
-                    tbody.innerHTML = data.data.map((p, i) => {
-                        const pnl = p.unrealized_pnl;
-                        const pnlCls = pnl >= 0 ? 'pnl-pos' : 'pnl-neg';
-                        const pnlStr = (pnl >= 0 ? '+' : '') + '₹' + pnl.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                        return `<tr>
+                    if (data.status === 'success' && data.data.length > 0) {
+                        tbody.innerHTML = data.data.map((p, i) => {
+                            const pnl = p.unrealized_pnl;
+                            const pnlCls = pnl >= 0 ? 'pnl-pos' : 'pnl-neg';
+                            const pnlStr = (pnl >= 0 ? '+' : '') + '₹' + pnl.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                            return `<tr>
                             <td style="color:var(--text-dim);">${i + 1}</td>
                             <td style="font-weight:600;">${p.script}</td>
                             <td><span class="dir-${p.direction.toLowerCase()}">${p.direction}</span></td>
@@ -488,39 +517,39 @@
                             <td>₹${Number(p.ltp).toLocaleString('en-IN')}</td>
                             <td class="${pnlCls}">${pnlStr}</td>
                         </tr>`;
-                    }).join('');
-                } else {
-                    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-dim);padding:1.5rem;">No open positions</td></tr>';
+                        }).join('');
+                    } else {
+                        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-dim);padding:1.5rem;">No open positions</td></tr>';
+                    }
+                } catch (err) {
+                    console.error('Positions fetch failed', err);
                 }
-            } catch (err) {
-                console.error('Positions fetch failed', err);
             }
-        }
 
-        let _posInterval = null;
+            let _posInterval = null;
 
-        function togglePositionRefresh() {
-            const btn = document.getElementById('pos-refresh-btn');
-            if (_posInterval) {
-                clearInterval(_posInterval);
-                _posInterval = null;
-                btn.textContent = '▶ Live Refresh';
-                btn.style.background = 'rgba(35,134,54,0.2)';
-                btn.style.borderColor = '#238636';
-                btn.style.color = '#4ade80';
-            } else {
-                fetchPositions();
-                _posInterval = setInterval(fetchPositions, 5000);
-                btn.textContent = '⏹ Stop Refresh';
-                btn.style.background = 'rgba(248,113,113,0.15)';
-                btn.style.borderColor = '#f87171';
-                btn.style.color = '#f87171';
+            function togglePositionRefresh() {
+                const btn = document.getElementById('pos-refresh-btn');
+                if (_posInterval) {
+                    clearInterval(_posInterval);
+                    _posInterval = null;
+                    btn.textContent = '▶ Live Refresh';
+                    btn.style.background = 'rgba(35,134,54,0.2)';
+                    btn.style.borderColor = '#238636';
+                    btn.style.color = '#4ade80';
+                } else {
+                    fetchPositions();
+                    _posInterval = setInterval(fetchPositions, 5000);
+                    btn.textContent = '⏹ Stop Refresh';
+                    btn.style.background = 'rgba(248,113,113,0.15)';
+                    btn.style.borderColor = '#f87171';
+                    btn.style.color = '#f87171';
+                }
             }
-        }
 
-        setInterval(fetchStatus, 2000);
-        fetchStatus();
-    </script>
+            setInterval(fetchStatus, 2000);
+            fetchStatus();
+        </script>
 </body>
 
 </html>

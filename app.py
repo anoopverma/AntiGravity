@@ -172,38 +172,47 @@ def get_status():
 def start():
     global strategy_thread, running_flag, paused_flag, active_strategies, expiry_date
     data = request.get_json(silent=True) or {}
-    selected_strategies = data.get('strategies', [])
-    mode = data.get('mode', 'paper')
+    live_strategies = data.get('live', [])
+    paper_strategies = data.get('paper', [])
     
     if not dhan:
         return jsonify({"status": "error", "message": "Dhan not initialised"}), 503
         
-    if not selected_strategies:
+    if not live_strategies and not paper_strategies:
         return jsonify({"status": "error", "message": "No strategies selected"}), 400
         
     if strategy_thread is None or not strategy_thread.is_alive() or not running_flag:
         active_strategies = []
+        loaded_names = []
         
         # Instantiate requested strategies
-        if "v4_gamma" in selected_strategies:
-            try:
-                from strategy.v4_trailing_sl_strategy import NiftyV4TrailingSLStrategy
-                s1 = NiftyV4TrailingSLStrategy(expiry_date)
-                s1.dhan = dhan
-                s1.paper_trade = (mode == "paper")
-                active_strategies.append(s1)
-            except Exception as e:
-                logger.error(f"Failed to load V4: {e}")
-                
-        if "gamma_blast" in selected_strategies:
-            try:
-                from strategy.gamma_spike_strategy import NiftyGammaSpikeStrategy
-                s2 = NiftyGammaSpikeStrategy(CLIENT_ID, ACCESS_TOKEN)
-                s2.dhan = dhan
-                s2.paper_trade = (mode == "paper")
-                active_strategies.append(s2)
-            except Exception as e:
-                logger.error(f"Failed to load Gamma Blast: {e}")
+        def load_strategy(strat_id, is_paper):
+            if strat_id == "v4_gamma":
+                try:
+                    from strategy.v4_trailing_sl_strategy import NiftyV4TrailingSLStrategy
+                    s1 = NiftyV4TrailingSLStrategy(expiry_date)
+                    s1.dhan = dhan
+                    s1.paper_trade = is_paper
+                    active_strategies.append(s1)
+                    loaded_names.append(f"V4[{'P' if is_paper else 'L'}]")
+                except Exception as e:
+                    logger.error(f"Failed to load V4: {e}")
+                    
+            elif strat_id == "gamma_blast":
+                try:
+                    from strategy.gamma_spike_strategy import NiftyGammaSpikeStrategy
+                    s2 = NiftyGammaSpikeStrategy(CLIENT_ID, ACCESS_TOKEN)
+                    s2.dhan = dhan
+                    s2.paper_trade = is_paper
+                    active_strategies.append(s2)
+                    loaded_names.append(f"GammaBlast[{'P' if is_paper else 'L'}]")
+                except Exception as e:
+                    logger.error(f"Failed to load Gamma Blast: {e}")
+                    
+        for s in live_strategies:
+            load_strategy(s, False)
+        for s in paper_strategies:
+            load_strategy(s, True)
         
         if not active_strategies:
             return jsonify({"status": "error", "message": "Failed to load instances"}), 500
@@ -211,12 +220,12 @@ def start():
         running_flag = True
         paused_flag = False
         
-        logger.info(f"Starting Engine with selected strategies: {selected_strategies}")
+        logger.info(f"Starting Engine with Live: {live_strategies} | Paper: {paper_strategies}")
         strategy_thread = threading.Thread(target=strategy_loop, daemon=True)
         strategy_thread.start()
         
-        names = ", ".join(selected_strategies)
-        return jsonify({"status": "success", "message": f"Strategy Engine Started [{names}]"})
+        names_str = ", ".join(loaded_names)
+        return jsonify({"status": "success", "message": f"Strategy Engine Started [{names_str}]"})
         
     return jsonify({"status": "error", "message": "Engine already running"}), 400
 
