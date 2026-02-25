@@ -81,6 +81,10 @@ def strategy_loop():
         try:
             if not paused_flag:
                 for strat in active_strategies:
+                    # check if the strategy is individually paused
+                    if getattr(strat, '_is_paused', False):
+                        continue
+                        
                     # Depending on strategy class, call run_iteration appropriately
                     if hasattr(strat, 'run_iteration'):
                         import inspect
@@ -155,7 +159,13 @@ def get_status():
     in_pos = any(getattr(s, 'in_position', False) for s in active_strategies) if active_strategies else False
     u_pnl = sum(getattr(s, 'unrealized_pnl', 0) for s in active_strategies) if active_strategies else 0
     r_pnl = sum(getattr(s, 'realized_pnl', 0) for s in active_strategies) if active_strategies else 0
-    names = [s.__class__.__name__.replace("Nifty", "").replace("Strategy", "") for s in active_strategies]
+    
+    names = []
+    for s in active_strategies:
+        base_name = s.__class__.__name__.replace("Nifty", "").replace("Strategy", "")
+        mode = "P" if getattr(s, "paper_trade", False) else "L"
+        state = "[PAUSED]" if getattr(s, "_is_paused", False) else ""
+        names.append(f"{base_name}[{mode}]{state}")
     
     return jsonify({
         "broker":        current_broker,
@@ -182,8 +192,9 @@ def start():
         return jsonify({"status": "error", "message": "No strategies selected"}), 400
         
     if strategy_thread is None or not strategy_thread.is_alive() or not running_flag:
-        active_strategies = []
+        # Initial boot
         loaded_names = []
+        active_strategies.clear()
         
         # Instantiate requested strategies
         def load_strategy(strat_id, is_paper):
@@ -227,25 +238,111 @@ def start():
         names_str = ", ".join(loaded_names)
         return jsonify({"status": "success", "message": f"Strategy Engine Started [{names_str}]"})
         
-    return jsonify({"status": "error", "message": "Engine already running"}), 400
+    else:
+        # Engine is already running. We dynamically add the new strategies if not already present.
+        loaded_names = []
+        already_loaded = []
+        
+        def is_already_loaded(strat_id, is_paper):
+            expected_class = "NiftyV4TrailingSLStrategy" if strat_id == "v4_gamma" else "NiftyGammaSpikeStrategy"
+            for s in active_strategies:
+                if s.__class__.__name__ == expected_class and getattr(s, 'paper_trade', False) == is_paper:
+                    return True
+            return False
+
+        def append_strategy(strat_id, is_paper):
+            if is_already_loaded(strat_id, is_paper):
+                mode = 'P' if is_paper else 'L'
+                name = "V4" if strat_id == "v4_gamma" else "GammaBlast"
+                already_loaded.append(f"{name}[{mode}]")
+                return
+
+            if strat_id == "v4_gamma":
+                try:
+                    from strategy.v4_trailing_sl_strategy import NiftyV4TrailingSLStrategy
+                    s1 = NiftyV4TrailingSLStrategy(expiry_date)
+                    s1.dhan = dhan
+                    s1.paper_trade = is_paper
+                    active_strategies.append(s1)
+                    loaded_names.append(f"V4[{'P' if is_paper else 'L'}]")
+                except Exception as e:
+                    logger.error(f"Failed to load V4: {e}")
+                    
+            elif strat_id == "gamma_blast":
+                try:
+                    from strategy.gamma_spike_strategy import NiftyGammaSpikeStrategy
+                    s2 = NiftyGammaSpikeStrategy(CLIENT_ID, ACCESS_TOKEN)
+                    s2.dhan = dhan
+                    s2.paper_trade = is_paper
+                    active_strategies.append(s2)
+                    loaded_names.append(f"GammaBlast[{'P' if is_paper else 'L'}]")
+                except Exception as e:
+                    logger.error(f"Failed to load Gamma Blast: {e}")
+
+        for s in live_strategies:
+            append_strategy(s, False)
+        for s in paper_strategies:
+            append_strategy(s, True)
+
+        if not loaded_names and already_loaded:
+            return jsonify({"status": "error", "message": f"Strategies ({', '.join(already_loaded)}) are already running!"}), 400
+        elif not loaded_names:
+            return jsonify({"status": "error", "message": "Failed to load instances"}), 500
+
+        logger.info(f"Added strategies Live: {live_strategies} | Paper: {paper_strategies} to running Engine.")
+        names_str = ", ".join(loaded_names)
+        return jsonify({"status": "success", "message": f"Added strategies [{names_str}] to existing Engine"})
+
 
 
 @app.route('/api/pause', methods=['POST'])
 def pause():
-    global paused_flag, running_flag
+    global paused_flag, running_flag, active_strategies
     if not running_flag:
         return jsonify({"status": "error", "message": "Engine is not running"}), 503
-    paused_flag = True
-    return jsonify({"status": "success", "message": "Strategy Engine Paused"})
+    
+    data = request.get_json(silent=True) or {}
+    target = data.get('target', 'all')
+    
+    effect_count = 0
+    if target == 'all':
+        paused_flag = True
+        return jsonify({"status": "success", "message": "Strategy Engine Paused (ALL)"})
+    else:
+        # Pause specific
+        is_paper_target = (target == 'paper')
+        for strat in active_strategies:
+            if getattr(strat, 'paper_trade', False) == is_paper_target:
+                strat._is_paused = True # mark internally
+                effect_count += 1
+        return jsonify({"status": "success", "message": f"Paused {target.upper()} strategies"})
 
 
 @app.route('/api/resume', methods=['POST'])
 def resume():
-    global paused_flag, running_flag
+    global paused_flag, running_flag, active_strategies
     if not running_flag:
         return jsonify({"status": "error", "message": "Engine is not running"}), 503
-    paused_flag = False
-    return jsonify({"status": "success", "message": "Strategy Engine Resumed"})
+
+    data = request.get_json(silent=True) or {}
+    target = data.get('target', 'all')
+    
+    if target == 'all':
+        paused_flag = False
+        for strat in active_strategies:
+            strat._is_paused = False
+        return jsonify({"status": "success", "message": "Strategy Engine Resumed (ALL)"})
+    else:
+        is_paper_target = (target == 'paper')
+        for strat in active_strategies:
+            if getattr(strat, 'paper_trade', False) == is_paper_target:
+                strat._is_paused = False
+        
+        # If any strategies remain unpaused, ensure global is False
+        if any(not getattr(s, '_is_paused', False) for s in active_strategies):
+            paused_flag = False
+        
+        return jsonify({"status": "success", "message": f"Resumed {target.upper()} strategies"})
 
 
 @app.route('/api/stop', methods=['POST'])
@@ -254,12 +351,28 @@ def stop_bot():
     if not running_flag:
         return jsonify({"status": "error", "message": "Engine is already stopped"}), 400
         
-    running_flag = False
-    paused_flag = False
-    # Clear out the instances so state is fresh next time
-    active_strategies = []
+    data = request.get_json(silent=True) or {}
+    target = data.get('target', 'all')
     
-    return jsonify({"status": "success", "message": "Strategy Engine Stopped"})
+    if target == 'all':
+        running_flag = False
+        paused_flag = False
+        active_strategies = []
+        logger.info("Cleared state: ALL Live and Paper strategies stopped.")
+        return jsonify({"status": "success", "message": "All BOTS Stopped Completely"})
+    else:
+        is_paper_target = (target == 'paper')
+        logger.info(f"Cleared state: Stopping {'Paper' if is_paper_target else 'Live'} strategies.")
+        # Retain strategies that do NOT belong to the targeted section
+        active_strategies = [s for s in active_strategies if getattr(s, 'paper_trade', False) != is_paper_target]
+        
+        if not active_strategies:
+            running_flag = False
+            paused_flag = False
+            return jsonify({"status": "success", "message": f"Stopped {target.upper()} strategies. Engine stopped as no strategies remain."})
+            
+        return jsonify({"status": "success", "message": f"Stopped {target.upper()} strategies"})
+
 
 
 

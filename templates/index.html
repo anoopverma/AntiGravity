@@ -322,10 +322,12 @@
                 </tbody>
             </table>
 
-            <div class="controls"
-                style="margin-bottom: 2rem; display: flex; align-items: center; justify-content: flex-start;">
-                <button class="btn-start" style="background:#dc2626; width: auto; padding: 0.6rem 1.5rem;"
-                    onclick="handleAction('start', 'live')">▶ Start LIVE Selected</button>
+            <div class="controls" style="margin-bottom: 2rem;">
+                <button class="btn-start" style="background:#dc2626;" onclick="handleAction('start', 'live')">▶ Start
+                    LIVE Selected</button>
+                <button class="btn-pause" onclick="handleAction('pause', 'live')">⏸ Pause</button>
+                <button class="btn-pause" onclick="handleAction('resume', 'live')">⏯ Resume</button>
+                <button class="btn-exit" onclick="handleAction('stop', 'live')">🛑 STOP BOT</button>
             </div>
 
             <div class="card-title" style="margin-top:2rem;">▶ Select Strategies for FORWARD Testing (Paper Trading)
@@ -354,20 +356,12 @@
                 </tbody>
             </table>
 
-            <div class="controls"
-                style="margin-bottom: 2rem; display: flex; align-items: center; justify-content: flex-start;">
-                <button class="btn-start" style="background:#2563eb; width: auto; padding: 0.6rem 1.5rem;"
-                    onclick="handleAction('start', 'paper')">▶ Start PAPER Selected</button>
-            </div>
-
-            <div class="controls"
-                style="margin-bottom: 0; display: flex; justify-content: center; gap: 0.8rem; border-top: 1px solid var(--border); padding-top: 1.5rem;">
-                <span
-                    style="color:var(--text-dim); align-self: center; font-size: 0.85rem; font-weight:600; margin-right: 1rem;">GLOBAL
-                    CONTROLS</span>
-                <button class="btn-pause" onclick="handleAction('pause')">⏸ Pause All BOTS</button>
-                <button class="btn-pause" onclick="handleAction('resume')">⏯ Resume All BOTS</button>
-                <button class="btn-exit" onclick="handleAction('stop')">🛑 STOP ALL BOTS</button>
+            <div class="controls" style="margin-bottom: 2rem;">
+                <button class="btn-start" style="background:#2563eb;" onclick="handleAction('start', 'paper')">▶ Start
+                    PAPER Selected</button>
+                <button class="btn-pause" onclick="handleAction('pause', 'paper')">⏸ Pause</button>
+                <button class="btn-pause" onclick="handleAction('resume', 'paper')">⏯ Resume</button>
+                <button class="btn-exit" onclick="handleAction('stop', 'paper')">🛑 STOP BOT</button>
             </div>
 
             <div class="card">
@@ -427,6 +421,13 @@
                     const res = await fetch('/api/status');
                     const data = await res.json();
 
+                    if (!window.hasLoggedInitialState && data.names && data.names.length > 0) {
+                        addLog(`Status: Engine currently running [${data.names.join(", ")}]`);
+                        window.hasLoggedInitialState = true;
+                    } else if (!window.hasLoggedInitialState) {
+                        window.hasLoggedInitialState = true;
+                    }
+
                     const statusText = document.getElementById('strategy-status-text');
                     const badgeContainer = document.getElementById('status-badge-container');
 
@@ -483,6 +484,9 @@
                             if (!confirmed) return;
                         }
                         payload = { live: liveSelected, paper: paperSelected };
+                    } else {
+                        // For pause, resume, stop, specify which type to target: 'live', 'paper', 'all'
+                        payload = { target: targetType };
                     }
 
                     const res = await fetch(`/api/${action}`, {
@@ -494,6 +498,11 @@
                     const data = await res.json();
                     addLog(data.message);
                     fetchStatus();
+
+                    // Auto-start live refresh if a LIVE strategy was successfully started
+                    if (action === 'start' && data.status === 'success' && payload.live && payload.live.length > 0 && !_posInterval) {
+                        togglePositionRefresh();
+                    }
                 } catch (err) {
                     addLog("Error executing action: " + action);
                 }
@@ -546,19 +555,24 @@
             }
 
             let _posInterval = null;
+            let _statusInterval = null;
 
             function togglePositionRefresh() {
                 const btn = document.getElementById('pos-refresh-btn');
                 if (_posInterval) {
                     clearInterval(_posInterval);
+                    clearInterval(_statusInterval);
                     _posInterval = null;
+                    _statusInterval = null;
                     btn.textContent = '▶ Live Refresh';
                     btn.style.background = 'rgba(35,134,54,0.2)';
                     btn.style.borderColor = '#238636';
                     btn.style.color = '#4ade80';
                 } else {
                     fetchPositions();
+                    fetchStatus();
                     _posInterval = setInterval(fetchPositions, 5000);
+                    _statusInterval = setInterval(fetchStatus, 2000);
                     btn.textContent = '⏹ Stop Refresh';
                     btn.style.background = 'rgba(248,113,113,0.15)';
                     btn.style.borderColor = '#f87171';
@@ -566,7 +580,7 @@
                 }
             }
 
-            setInterval(fetchStatus, 2000);
+            // Initialization on page load
             fetchStatus();
         </script>
 </body>
