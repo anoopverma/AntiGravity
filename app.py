@@ -78,6 +78,14 @@ def strategy_loop():
     logger.info(f"Background Strategy Thread Started. Broker: {current_broker}.")
     
     while running_flag:
+        now_ist = pd.Timestamp.now('Asia/Kolkata')
+        if now_ist.hour == 15 and now_ist.minute == 31:
+            logger.info("Auto-stopping engines at 3:31 PM IST.")
+            running_flag = False
+            paused_flag = False
+            active_strategies.clear()
+            break
+
         try:
             if not paused_flag:
                 for strat in active_strategies:
@@ -100,6 +108,15 @@ def strategy_loop():
         for _ in range(60):
             if not running_flag:
                 break
+                
+            now_ist = pd.Timestamp.now('Asia/Kolkata')
+            if now_ist.hour == 15 and now_ist.minute == 31:
+                logger.info("Auto-stopping engines at 3:31 PM IST.")
+                running_flag = False
+                paused_flag = False
+                active_strategies.clear()
+                break
+                
             time.sleep(1)
             
     logger.info("Background Strategy Thread Stopped.")
