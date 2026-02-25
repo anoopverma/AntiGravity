@@ -789,8 +789,7 @@
                 <span class="strategy-badge ${s.badge}">● ${s.label}</span>
                 <p class="strategy-desc">${s.desc}</p>
             `;
-            // Also refresh table based on selected db filter if wanted.
-            fetchBacktests();
+            // Table will update on next explicit refresh — no auto-fetch here
         }
 
         async function testDhan() {
@@ -987,8 +986,7 @@
             });
         }
 
-        // Initialize — no auto-polling; user refreshes manually via the Refresh button
-        fetchBacktests();
+        // No auto-fetch on load — data is loaded only on explicit user action
     </script>
 </body>
 
