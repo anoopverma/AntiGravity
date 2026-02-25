@@ -367,18 +367,56 @@
 
         {% elif status == 'error' %}
 
-        <div class="status-icon error">❌</div>
-        <h1>Connection Failed</h1>
-        <p class="subtitle">Could not get a valid access token from Dhan.</p>
+        <div class="status-icon warning">🔑</div>
+        <h1>Dhan Manual Connection</h1>
+        <p class="subtitle">Enter your Access Token manually or start the authorization flow.</p>
 
-        <div class="error-box">
+        <div class="token-box" style="padding-top: 2rem;">
+            <div class="token-label">Manual Access Token Entry</div>
+            <textarea id="manual-token" placeholder="Paste your access_token here..."
+                style="width: 100%; height: 80px; background: rgba(0,0,0,0.4); border: 1px solid var(--border); border-radius: 6px; color: #4ade80; font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; padding: 10px; resize: none;"></textarea>
+            <div id="token-text" style="display:none;"></div>
+        </div>
+
+        {% if error_message and error_message != "No tokenId or access_token received from Dhan." %}
+        <div class="error-box" style="margin-bottom: 1.5rem;">
             <strong>Error:</strong> {{ error_message }}
         </div>
+        {% endif %}
 
-        <div class="actions" style="margin-top: 1.5rem;">
-            <a href="/dhan/connect" class="btn btn-primary">Try Again</a>
-            <a href="/" class="btn btn-secondary">Dashboard</a>
+        <div class="actions">
+            <button class="btn btn-primary" onclick="saveManualToken()">⚡ Link Token</button>
+            <a href="/dhan/connect" class="btn btn-secondary">Official Login →</a>
         </div>
+        <div style="text-align:center; margin-top: 1rem;">
+            <a href="/" style="color:var(--text-dim); text-decoration:none; font-size: 0.8rem;">← Back to Dashboard</a>
+        </div>
+
+        <div class="save-success" id="save-msg">
+            <span>✓</span> Token linked! Strategy engine updated.
+        </div>
+
+        <script>
+            function saveManualToken() {
+                const token = document.getElementById('manual-token').value.trim();
+                if (!token) { alert('Please paste a token first.'); return; }
+
+                fetch('/dhan/save-token', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ access_token: token })
+                })
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            document.getElementById('save-msg').classList.add('show');
+                            setTimeout(() => window.location.href = '/', 1500);
+                        } else {
+                            alert('Error: ' + data.message);
+                        }
+                    });
+            }
+        </script>
 
         {% elif status == 'pending' %}
 
