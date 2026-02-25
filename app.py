@@ -156,15 +156,50 @@ def backtest():
 @app.route('/dhan/connect')
 @login_required
 def dhan_connect():
-    """Redirect user to Dhan login page to obtain a tokenId."""
-    import urllib.parse
+    """Redirect user to Dhan login page via the correct 3-step flow."""
+    import requests as _req
     api_key      = os.getenv("DHAN_API_KEY", "")
-    redirect_uri = urllib.parse.quote(request.host_url.rstrip('/') + '/dhan/callback', safe='')
-    dhan_login_url = (
-        f"https://api.dhan.co/partner/oauth/authorize"
-        f"?client_id={api_key}&redirect_uri={redirect_uri}&response_type=code"
-    )
-    return redirect(dhan_login_url)
+    client_secret = os.getenv("DHAN_CLIENT_SECRET", "")
+    redirect_uri = request.host_url.rstrip('/') + '/dhan/callback'
+    
+    try:
+        # Step 1: Generate Consent (Server-to-Server)
+        # Using /app/ for individual apps or /partner/ for partner apps
+        # The user's credentials look like an individual app
+        url = "https://auth.dhan.co/app/generate-consent"
+        headers = {
+            'api-key': api_key,
+            'client-secret': client_secret,
+            'Content-Type': 'application/json'
+        }
+        payload = {"redirectUrl": redirect_uri}
+        
+        logger.info(f"Generating Dhan consent via {url}...")
+        resp = _req.post(url, headers=headers, json=payload, timeout=10)
+        data = resp.json()
+        
+        if resp.ok and data.get('consentId'):
+            consent_id = data['consentId']
+            # Step 2: Redirect user to Dhan login page
+            login_url = f"https://auth.dhan.co/consent-login?consentId={consent_id}"
+            return redirect(login_url)
+        else:
+            # Fallback for partner type if /app/ fails
+            if resp.status_code == 404 or "not found" in str(data).lower():
+                url = "https://auth.dhan.co/partner/generate-consent"
+                logger.info(f"Retrying Dhan consent via {url}...")
+                resp = _req.post(url, headers=headers, json=payload, timeout=10)
+                data = resp.json()
+                if resp.ok and data.get('consentId'):
+                    return redirect(f"https://auth.dhan.co/consent-login?consentId={data['consentId']}")
+
+            error_msg = data.get('remarks') or data.get('message') or str(data)
+            logger.error(f"Dhan consent generation failed: {error_msg}")
+            return f"Dhan Connection Error: {error_msg}", 500
+            
+    except Exception as e:
+        logger.error(f"Exception in dhan_connect: {e}")
+        return f"Internal Server Error: {str(e)}", 500
 
 
 @app.route('/dhan/callback', methods=['GET', 'POST'])
