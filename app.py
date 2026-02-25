@@ -173,6 +173,7 @@ def start():
     global strategy_thread, running_flag, paused_flag, active_strategies, expiry_date
     data = request.get_json(silent=True) or {}
     selected_strategies = data.get('strategies', [])
+    mode = data.get('mode', 'paper')
     
     if not dhan:
         return jsonify({"status": "error", "message": "Dhan not initialised"}), 503
@@ -189,6 +190,7 @@ def start():
                 from strategy.v4_trailing_sl_strategy import NiftyV4TrailingSLStrategy
                 s1 = NiftyV4TrailingSLStrategy(expiry_date)
                 s1.dhan = dhan
+                s1.paper_trade = (mode == "paper")
                 active_strategies.append(s1)
             except Exception as e:
                 logger.error(f"Failed to load V4: {e}")
@@ -198,6 +200,7 @@ def start():
                 from strategy.gamma_spike_strategy import NiftyGammaSpikeStrategy
                 s2 = NiftyGammaSpikeStrategy(CLIENT_ID, ACCESS_TOKEN)
                 s2.dhan = dhan
+                s2.paper_trade = (mode == "paper")
                 active_strategies.append(s2)
             except Exception as e:
                 logger.error(f"Failed to load Gamma Blast: {e}")

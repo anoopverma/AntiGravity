@@ -18,7 +18,6 @@ load_dotenv()
 
 CLIENT_ID = os.getenv("DHAN_CLIENT_ID", "YOUR_CLIENT_ID")
 ACCESS_TOKEN = os.getenv("DHAN_ACCESS_TOKEN", "YOUR_ACCESS_TOKEN")
-PAPER_TRADE = os.getenv("PAPER_TRADE", "True").lower() == "true"
 
 class NiftyGammaSpikeStrategy:
     def __init__(self, client_id, access_token):
@@ -33,6 +32,10 @@ class NiftyGammaSpikeStrategy:
         self.gamma_window = deque(maxlen=20)
         self.spike_threshold = 1.3  # 30% spike in gamma above moving average
         self.in_position = False
+        self.current_position = None
+        self.paper_trade = True
+        self.unrealized_pnl = 0
+        self.realized_pnl = 0
         
     def get_option_chain(self, expiry_date):
         """Fetch the current option chain for Nifty."""
@@ -109,7 +112,7 @@ class NiftyGammaSpikeStrategy:
 
     def place_long_straddle(self, ce_security_id, pe_security_id, lot_size=65):
         """Place market BUY orders for ATM CE and PE (Long Straddle) for Gamma explosion."""
-        if PAPER_TRADE:
+        if self.paper_trade:
             logger.info(f"[PAPER TRADE] Placed Long Straddle for CE: {ce_security_id}, PE: {pe_security_id}, Qty: {lot_size}")
             self.in_position = True
             return True

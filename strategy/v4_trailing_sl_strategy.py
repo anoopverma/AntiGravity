@@ -14,7 +14,6 @@ load_dotenv()
 
 CLIENT_ID = os.getenv("DHAN_CLIENT_ID")
 ACCESS_TOKEN = os.getenv("DHAN_ACCESS_TOKEN")
-PAPER_TRADE = os.getenv("PAPER_TRADE", "True").lower() == "true"
 
 class NiftyV4TrailingSLStrategy:
     def __init__(self, target_expiry):
@@ -24,6 +23,7 @@ class NiftyV4TrailingSLStrategy:
         self.running = False
         self.paused = False
         self.in_position = False
+        self.paper_trade = True # Overriden by the app.py engine starter
         
         # --- Champion V4 Parameters (+103% Backtest ROI) ---
         self.initial_sl = 0.50        # Stop Loss at 50%
@@ -95,7 +95,7 @@ class NiftyV4TrailingSLStrategy:
             self.capture_benchmark()
             
         # Paper Trade Helper: Auto-set benchmark if we started late
-        if PAPER_TRADE and self.benchmark_straddle is None and (now.hour > 13 or (now.hour == 13 and now.minute > 45)):
+        if self.paper_trade and self.benchmark_straddle is None and (now.hour > 13 or (now.hour == 13 and now.minute > 45)):
             self.capture_benchmark()
 
         if self.in_position:
@@ -177,9 +177,10 @@ class NiftyV4TrailingSLStrategy:
             'time': datetime.datetime.now()
         }
         self.in_position = True
-        logger.info(f"✅ Order Placed: {opt_type} at {price}")
-        if not PAPER_TRADE:
+        logger.info(f"✅ Order Placed: {opt_type} at {price} (Paper: {self.paper_trade})")
+        if not self.paper_trade:
             # Real Dhan order placement would go here
+            logger.warning("LIVE ORDER PLACEMENT NOT YET IMPLEMENTED FOR DHAN API IN STRATEGY")
             pass
 
     def close_position(self, price, reason):
@@ -188,13 +189,49 @@ class NiftyV4TrailingSLStrategy:
         self.realized_pnl += pnl
         logger.info(f"🔴 Position Closed | Type: {self.current_position['type']} | Price: {price} | PnL: {round(pnl, 2)} | Reason: {reason}")
         self.in_position = False
+        old_position = self.current_position
         self.current_position = None
         self.unrealized_pnl = 0
-        if not PAPER_TRADE:
+        if not self.paper_trade:
             # Real Dhan order closure would go here
             pass
-        # Stop strategy for the day after exit to prevent overtrading
-        # self.running = False 
+
+        # Save to PostgreSQL
+        try:
+            import pandas as pd
+            from sqlalchemy import create_engine
+            uri = os.getenv("POSTGRES_URI")
+            if uri:
+                engine = create_engine(uri)
+                trade_record = {
+                    'Run_Date': datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    'Strategy_Name': "v4_gamma" if self.paper_trade else "v4_gamma_LIVE",
+                    'Date': datetime.datetime.now().strftime("%Y-%m-%d"),
+                    'Entry_Time': old_position['time'].strftime("%H:%M:%S"),
+                    'Exit_Time': datetime.datetime.now().strftime("%H:%M:%S"),
+                    'Option_Type': old_position['type'],
+                    'Action': 'BUY',
+                    'Qty': self.lot_size,
+                    'Buy_Price': round(old_position['entry'], 2),
+                    'Peak_Price': round(old_position['peak'], 2),
+                    'Sell_Price': round(price, 2),
+                    'PNL': round(pnl, 2),
+                    'ROI%': round(((price - old_position['entry']) / old_position['entry']) * 100, 2) if old_position['entry'] > 0 else 0,
+                    'Capital_ROI%': round((pnl / 100000) * 100, 2),
+                    'Reason': reason,
+                    'Win': pnl > 0
+                }
+                df = pd.DataFrame([trade_record])
+                table_name = "historical_forward_tests" if self.paper_trade else "live_trades"
+                try:
+                    existing = pd.read_sql(f"SELECT * FROM {table_name}", con=engine)
+                    df = pd.concat([existing, df], ignore_index=True)
+                except Exception:
+                    pass
+                df.to_sql(table_name, con=engine, if_exists='replace', index=False)
+                logger.info(f"Saved trade to DB table {table_name}")
+        except Exception as e:
+            logger.error(f"Failed to save trade to DB: {e}")
 
 if __name__ == "__main__":
     # Test execution
