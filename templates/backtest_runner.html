@@ -499,7 +499,7 @@
 
                 <div class="form-group">
                     <label>Run Date (Filter)</label>
-                    <select id="run-date-select" onchange="fetchBacktests()">
+                    <select id="run-date-select" onchange="applyRunDateFilter()">
                         <option value="ALL">All Runs</option>
                     </select>
                 </div>
@@ -652,6 +652,9 @@
             text.textContent = state === 'running' ? 'Running…' : state === 'done' ? 'Completed' : state === 'error' ? 'Failed' : 'Idle';
         }
 
+        // Global store for all fetched rows
+        let _allData = [];
+
         async function fetchBacktests() {
             try {
                 const res = await fetch('/api/backtests');
@@ -678,17 +681,18 @@
                         }
                     });
 
-                    // Update Table
+                    // Filter by selected strategy and store globally
                     const selectedStrategy = currentVal;
                     let rows = data.data;
                     if (selectedStrategy !== 'ALL') {
                         rows = rows.filter(r => r.Strategy_Name === selectedStrategy);
                     }
+                    _allData = rows.slice();
 
-                    // Populate Run Date filter based on visible strategy
+                    // Populate Run Date dropdown (client-side, no onchange fire)
                     const rdSelect = document.getElementById('run-date-select');
                     const currentRdVal = rdSelect.value;
-                    const dbRunDates = [...new Set(rows.map(r => r.Run_Date).filter(Boolean))].sort().reverse();
+                    const dbRunDates = [...new Set(_allData.map(r => r.Run_Date).filter(Boolean))].sort().reverse();
 
                     rdSelect.innerHTML = '<option value="ALL">All Runs</option>';
                     dbRunDates.forEach(rd => {
@@ -697,88 +701,105 @@
                         opt.textContent = rd;
                         rdSelect.appendChild(opt);
                     });
-
-                    // Restore selection if valid
                     if (dbRunDates.includes(currentRdVal)) {
                         rdSelect.value = currentRdVal;
                     }
 
-                    const selectedRunDate = rdSelect.value;
-                    if (selectedRunDate !== 'ALL') {
-                        rows = rows.filter(r => r.Run_Date === selectedRunDate);
-                    }
-
-                    const tbody = document.getElementById('backtest-tbody');
-                    tbody.innerHTML = '';
-
-                    let totalPnL = 0;
-                    let winningTrades = 0;
-
-                    rows.forEach((row, idx) => {
-                        const tr = document.createElement('tr');
-                        const pnl = parseFloat(row.PNL) || 0;
-                        const roi = parseFloat(row['ROI%']) || 0;
-                        const isWin = pnl > 0;
-                        const fmt = (n) => n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-                        totalPnL += pnl;
-                        if (isWin) winningTrades++;
-
-                        const rowColor = isWin ? '#4ade80' : '#f87171';
-                        tr.style.color = rowColor;
-                        tr.innerHTML = `
-                            <td>${idx + 1}</td>
-                            <td>${row.Run_Date || '-'}</td>
-                            <td>${row.Strategy_Name || '-'}</td>
-                            <td>${row.Date || '-'}</td>
-                            <td>${row.Option_Type || '-'}</td>
-                            <td>${row.Action || '-'}</td>
-                            <td>${row.Qty || '-'}</td>
-                            <td>${row.Entry_Time || '-'}</td>
-                            <td>${row.Exit_Time || '-'}</td>
-                            <td>₹${row.Buy_Price ?? 0}</td>
-                            <td>₹${row.Peak_Price ?? 0}</td>
-                            <td>₹${row.Sell_Price ?? 0}</td>
-                            <td>₹${fmt(pnl)}</td>
-                            <td>${roi.toFixed(2)}%</td>
-                            <td style="font-weight:600;">${(parseFloat(row['Capital_ROI%']) || 0).toFixed(2)}%</td>
-                            <td>${row.Reason || '-'}</td>
-                            <td><b>${isWin ? 'WIN' : 'LOSS'}</b></td>
-                        `;
-                        tbody.appendChild(tr);
-                    });
-
-                    const INITIAL_CAPITAL = 100000;
-                    const totalTrades = rows.length;
-                    const accuracy = totalTrades > 0 ? ((winningTrades / totalTrades) * 100).toFixed(2) : 0;
-                    const totalROI = (totalPnL / INITIAL_CAPITAL) * 100;
-
-                    document.getElementById('backtest-tfoot').innerHTML = `
-                        <tr style="background-color: #161b22; font-weight: bold; border-top: 2px solid #30363d;">
-                            <td colspan="12" style="text-align: left; color: #ffffff;">📊 Records: ${totalTrades} Trades | Accuracy: <span style="color:#60a5fa">${accuracy}%</span></td>
-                            <td class="${totalPnL > 0 ? 'win' : 'loss'}">₹${totalPnL.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                            <td class="${totalROI > 0 ? 'win' : 'loss'}">${totalROI.toFixed(2)}%</td>
-                            <td colspan="3"></td>
-                        </tr>
-                    `;
-
-                    if (selectedStrategy !== 'ALL' && rows.length > 0) {
-                        const sLabel = STRATEGIES[selectedStrategy] ? STRATEGIES[selectedStrategy].label : selectedStrategy;
-                        renderEquityCurve(rows, sLabel);
-                    } else {
-                        document.getElementById('equity-card').style.display = 'none';
-                    }
-
                 } else {
+                    _allData = [];
                     document.getElementById('backtest-tbody').innerHTML =
                         `<tr><td colspan="17" class="empty-state">No database records found. Run a backtest first.</td></tr>`;
                     document.getElementById('backtest-tfoot').innerHTML = '';
                     document.getElementById('equity-card').style.display = 'none';
                 }
 
-                onStrategyChange();
+                // Always render table from cached data (client-side only)
+                renderTable();
+
             } catch (err) {
                 console.error("Backtest fetch failed", err);
+            }
+        }
+
+        // Called by Run Date dropdown onchange — no API call, pure client-side filter
+        function applyRunDateFilter() {
+            renderTable();
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('backtest-tbody');
+            tbody.innerHTML = '';
+
+            const selectedStrategy = document.getElementById('strategy-select').value;
+            const selectedRunDate = document.getElementById('run-date-select').value;
+
+            let rows = _allData.slice();
+            if (selectedRunDate !== 'ALL') {
+                rows = rows.filter(r => r.Run_Date === selectedRunDate);
+            }
+
+            if (rows.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="17" class="empty-state">No records for this selection.</td></tr>`;
+                document.getElementById('backtest-tfoot').innerHTML = '';
+                document.getElementById('equity-card').style.display = 'none';
+                return;
+            }
+
+            let totalPnL = 0;
+            let winningTrades = 0;
+
+            rows.forEach((row, idx) => {
+                const tr = document.createElement('tr');
+                const pnl = parseFloat(row.PNL) || 0;
+                const roi = parseFloat(row['ROI%']) || 0;
+                const isWin = pnl > 0;
+                const fmt = (n) => n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+                totalPnL += pnl;
+                if (isWin) winningTrades++;
+
+                tr.style.color = isWin ? '#4ade80' : '#f87171';
+                tr.innerHTML = `
+                    <td>${idx + 1}</td>
+                    <td>${row.Run_Date || '-'}</td>
+                    <td>${row.Strategy_Name || '-'}</td>
+                    <td>${row.Date || '-'}</td>
+                    <td>${row.Option_Type || '-'}</td>
+                    <td>${row.Action || '-'}</td>
+                    <td>${row.Qty || '-'}</td>
+                    <td>${row.Entry_Time || '-'}</td>
+                    <td>${row.Exit_Time || '-'}</td>
+                    <td>₹${row.Buy_Price ?? 0}</td>
+                    <td>₹${row.Peak_Price ?? 0}</td>
+                    <td>₹${row.Sell_Price ?? 0}</td>
+                    <td>₹${fmt(pnl)}</td>
+                    <td>${roi.toFixed(2)}%</td>
+                    <td style="font-weight:600;">${(parseFloat(row['Capital_ROI%']) || 0).toFixed(2)}%</td>
+                    <td>${row.Reason || '-'}</td>
+                    <td><b>${isWin ? 'WIN' : 'LOSS'}</b></td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            const capitalInput = parseInt(document.getElementById('capital').value) || 100000;
+            const totalTrades = rows.length;
+            const accuracy = totalTrades > 0 ? ((winningTrades / totalTrades) * 100).toFixed(2) : 0;
+            const totalROI = (totalPnL / capitalInput) * 100;
+
+            document.getElementById('backtest-tfoot').innerHTML = `
+                <tr style="background-color: #161b22; font-weight: bold; border-top: 2px solid #30363d;">
+                    <td colspan="12" style="text-align: left; color: #ffffff;">📊 Records: ${totalTrades} Trades | Accuracy: <span style="color:#60a5fa">${accuracy}%</span></td>
+                    <td class="${totalPnL > 0 ? 'win' : 'loss'}">₹${totalPnL.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    <td class="${totalROI > 0 ? 'win' : 'loss'}">${totalROI.toFixed(2)}%</td>
+                    <td colspan="3"></td>
+                </tr>
+            `;
+
+            if (selectedStrategy !== 'ALL' && rows.length > 0) {
+                const sLabel = STRATEGIES[selectedStrategy] ? STRATEGIES[selectedStrategy].label : selectedStrategy;
+                renderEquityCurve(rows, sLabel);
+            } else {
+                document.getElementById('equity-card').style.display = 'none';
             }
         }
 
