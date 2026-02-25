@@ -27,7 +27,7 @@ class NiftyTuesdayDhanBacktester:
         load_dotenv()
         # Support both standard and Render env var names
         self.client_id = os.getenv('DHAN_CLIENT_ID') or os.getenv('DHAN_API_KEY')
-        self.access_token = os.getenv('DHAN_ACCESS_TOKEN') or os.getenv('DHAN_CLIENT_SECRET')
+        self.access_token = os.getenv('DHAN_ACCESS_TOKEN')
         
         if not self.client_id or not self.access_token:
             raise ValueError("Dhan API credentials (ID/Key or Token/Secret) not found in environment")

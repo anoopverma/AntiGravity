@@ -35,15 +35,14 @@ def login_required(f):
 
 # ── Dhan API client ──────────────────────────────────────────────────────────
 # Lazy/safe init: app must boot even without keys (Render dashboard-only mode)
-# Support both standard and Render env var names
-CLIENT_ID   = os.getenv("DHAN_CLIENT_ID") or os.getenv("DHAN_API_KEY") or ""
-ACCESS_TOKEN = os.getenv("DHAN_ACCESS_TOKEN") or os.getenv("DHAN_CLIENT_SECRET") or ""
+CLIENT_ID   = os.getenv("DHAN_CLIENT_ID") or ""
+ACCESS_TOKEN = os.getenv("DHAN_ACCESS_TOKEN") or ""
 
 dhan = None
 ACTIVE_TOKEN = ACCESS_TOKEN  # Track the current active token for subprocesses
 
-def init_dhan_local():
-    """Method 1: Init Dhan client using personal ACCESS_TOKEN from env (for local use)"""
+def init_dhan():
+    """Init Dhan client using DHAN_ACCESS_TOKEN from env (Local .env or Render Env Variables)"""
     global dhan
     try:
         from dhanhq import dhanhq as _DhanHQ
@@ -52,29 +51,14 @@ def init_dhan_local():
             # Update strategy if it's already booted
             if 'strategy' in globals() and strategy is not None:
                 strategy.dhan = dhan
-            logger.info("Dhan client initialised successfully via Local Access Token.")
+            logger.info("Dhan client initialised successfully via Environment Access Token.")
         else:
             logger.warning("DHAN_CLIENT_ID / DHAN_ACCESS_TOKEN not set — local trading disabled.")
     except Exception as e:
-        logger.warning(f"Dhan client init failed (local method): {e}")
-
-def init_dhan_oauth(token):
-    """Method 2: Init Dhan client using Token from OAuth Callback (for deployment)"""
-    global dhan, ACTIVE_TOKEN
-    try:
-        from dhanhq import dhanhq as _DhanHQ
-        if CLIENT_ID and token:
-            dhan = _DhanHQ(str(CLIENT_ID), str(token))
-            ACTIVE_TOKEN = token # Update the active token
-            # Update strategy if it's already booted
-            if 'strategy' in globals() and strategy is not None:
-                strategy.dhan = dhan
-            logger.info("Dhan client initialised successfully via OAuth Callback Token.")
-    except Exception as e:
-        logger.warning(f"Dhan client init failed (OAuth method): {e}")
+        logger.warning(f"Dhan client init failed: {e}")
 
 # Bootup local client initially if token is present
-init_dhan_local()
+init_dhan()
 
 # ── Strategy ─────────────────────────────────────────────────────────────────
 strategy = None
@@ -149,135 +133,6 @@ def backtest():
     response = make_response(render_template('backtest_runner.html'))
     response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
     return response
-
-
-# ── Dhan OAuth flow ───────────────────────────────────────────────────────────
-
-@app.route('/dhan/connect')
-@login_required
-def dhan_connect():
-    """Redirect user to Dhan login page via the correct 3-step flow."""
-    import requests as _req
-    api_key      = os.getenv("DHAN_API_KEY", "")
-    client_secret = os.getenv("DHAN_CLIENT_SECRET", "")
-    redirect_uri = request.host_url.rstrip('/') + '/dhan/callback'
-    
-    try:
-        # Step 1: Generate Consent (Server-to-Server)
-        # Using /app/ for individual apps or /partner/ for partner apps
-        # The user's credentials look like an individual app
-        url = "https://auth.dhan.co/app/generate-consent"
-        headers = {
-            'api-key': api_key,
-            'client-secret': client_secret,
-            'Content-Type': 'application/json'
-        }
-        payload = {"redirectUrl": redirect_uri}
-        
-        logger.info(f"Generating Dhan consent via {url}...")
-        resp = _req.post(url, headers=headers, json=payload, timeout=10)
-        data = resp.json()
-        
-        if resp.ok and data.get('consentId'):
-            consent_id = data['consentId']
-            # Step 2: Redirect user to Dhan login page
-            login_url = f"https://auth.dhan.co/consent-login?consentId={consent_id}"
-            return redirect(login_url)
-        else:
-            # Fallback for partner type if /app/ fails
-            if resp.status_code == 404 or "not found" in str(data).lower():
-                url = "https://auth.dhan.co/partner/generate-consent"
-                logger.info(f"Retrying Dhan consent via {url}...")
-                resp = _req.post(url, headers=headers, json=payload, timeout=10)
-                data = resp.json()
-                if resp.ok and data.get('consentId'):
-                    return redirect(f"https://auth.dhan.co/consent-login?consentId={data['consentId']}")
-
-            error_msg = data.get('remarks') or data.get('message') or str(data)
-            logger.error(f"Dhan consent generation failed: {error_msg}")
-            return f"Dhan Connection Error: {error_msg}", 500
-            
-    except Exception as e:
-        logger.error(f"Exception in dhan_connect: {e}")
-        return f"Internal Server Error: {str(e)}", 500
-
-
-@app.route('/dhan/callback', methods=['GET', 'POST'])
-def dhan_callback():
-    """
-    Dhan redirects here after user login.
-    GET  → tokenId arrives as a query param; exchange it for access_token.
-    POST → manual exchange form submission.
-    """
-    from datetime import datetime as _dt
-    import requests as _req
-
-    token_id     = request.args.get('tokenId') or request.form.get('token_id', '')
-    access_token = request.args.get('access_token', '')   # some flows pass directly
-    error_msg    = None
-
-    # If access_token came directly, we're done
-    if access_token:
-        return render_template(
-            'dhan_callback.html',
-            status='success',
-            access_token=access_token,
-            client_id=os.getenv("DHAN_CLIENT_ID", CLIENT_ID),
-            connected_at=_dt.now().strftime('%d %b %Y, %I:%M %p'),
-        )
-
-    # Exchange tokenId → access_token via Dhan API
-    if token_id:
-        try:
-            resp = _req.post(
-                'https://api.dhan.co/partner/oauth/token',
-                json={
-                    'tokenId':      token_id,
-                    'clientId':     os.getenv("DHAN_API_KEY", ""),
-                    'clientSecret': os.getenv("DHAN_CLIENT_SECRET", ""),
-                },
-                timeout=10,
-            )
-            data = resp.json()
-            if resp.ok and data.get('access_token'):
-                return render_template(
-                    'dhan_callback.html',
-                    status='success',
-                    access_token=data['access_token'],
-                    client_id=data.get('dhanClientId', os.getenv("DHAN_CLIENT_ID", CLIENT_ID)),
-                    connected_at=_dt.now().strftime('%d %b %Y, %I:%M %p'),
-                )
-            else:
-                # Show pending UI so user can try manually
-                return render_template(
-                    'dhan_callback.html',
-                    status='pending',
-                    token_id=token_id,
-                )
-        except Exception as e:
-            error_msg = str(e)
-
-    return render_template(
-        'dhan_callback.html',
-        status='error',
-        error_message=error_msg or "No tokenId or access_token received from Dhan.",
-    )
-
-
-@app.route('/dhan/save-token', methods=['POST'])
-@login_required
-def dhan_save_token():
-    """Hot-reload the Dhan client with a new access token (no restart needed)."""
-    global dhan
-    data = request.get_json(force=True)
-    new_token = data.get('access_token', '').strip()
-    if not new_token:
-        return jsonify({"status": "error", "message": "No token provided"}), 400
-    try:
-        init_dhan_oauth(new_token)
-        return jsonify({"status": "success", "message": "Token saved and client reloaded."})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
 
 
 

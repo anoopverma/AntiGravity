@@ -275,8 +275,6 @@
         <div class="header-bar">
             <h1>⚡ AntiGravity — Live Execution Monitor</h1>
             <div style="display:flex;gap:0.75rem;align-items:center;">
-                <a href="javascript:void(0)" onclick="openDhanConnect()" class="btn-logout" id="dhan-connect-btn"
-                    style="border-color:#10b981;color:#34d399;font-weight:600;">Connect Dhan 🔒</a>
                 <a href="/backtest" class="btn-logout" style="border-color:#1e3c72;color:#93c5fd;">Backtest Runner →</a>
                 <a href="/logout" class="btn-logout">Sign Out →</a>
             </div>
@@ -469,36 +467,6 @@
                 btn.style.color = '#f87171';
             }
         }
-
-        // ── Dhan Popup & Message Handling ─────────────────────────────────────
-        function openDhanConnect() {
-            const width = 500, height = 650;
-            const left = (window.screen.width / 2) - (width / 2);
-            const top = (window.screen.height / 2) - (height / 2);
-
-            const popup = window.open('/dhan/connect', 'DhanConnect',
-                `width=${width},height=${height},top=${top},left=${left},scrollbars=yes,resizable=yes`);
-
-            if (window.focus && popup) popup.focus();
-        }
-
-        window.addEventListener('message', function (event) {
-            // Safety check: only accept messages from same origin
-            if (event.origin !== window.location.origin) return;
-
-            const data = event.data;
-            if (data && data.type === 'DHAN_CONNECTED') {
-                addLog(`✅ Dhan Connected! Received token for Client: ${data.clientId}`);
-
-                // Visual feedback on the button
-                const btn = document.getElementById('dhan-connect-btn');
-                if (btn) {
-                    btn.textContent = 'Dhan Linked ✓';
-                    btn.style.borderColor = 'rgba(74, 222, 128, 0.4)';
-                    btn.style.color = '#4ade80';
-                }
-            }
-        });
 
         setInterval(fetchStatus, 2000);
         fetchStatus();
