@@ -321,6 +321,36 @@ def close_all_positions():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
+@app.route('/api/positions', methods=['GET'])
+def get_positions():
+    if not dhan:
+        return jsonify({"status": "error", "message": "Dhan client not initialised"}), 503
+    try:
+        pos_resp = dhan.get_positions()
+        positions = []
+        if pos_resp.get("status") == "success":
+            for p in pos_resp.get("data", []):
+                net_qty = int(p.get("netQty", 0))
+                if net_qty == 0:
+                    continue
+                buy_avg  = float(p.get("buyAvg",  0) or 0)
+                sell_avg = float(p.get("sellAvg", 0) or 0)
+                ltp      = float(p.get("ltp",     0) or 0)
+                unrealized = (ltp - buy_avg) * net_qty if net_qty > 0 else (sell_avg - ltp) * abs(net_qty)
+                positions.append({
+                    "script":    p.get("tradingSymbol", p.get("securityId", "Unknown")),
+                    "direction": "BUY" if net_qty > 0 else "SELL",
+                    "qty":       abs(net_qty),
+                    "avg_price": buy_avg if net_qty > 0 else sell_avg,
+                    "ltp":       ltp,
+                    "unrealized_pnl": round(unrealized, 2),
+                })
+        return jsonify({"status": "success", "data": positions})
+    except Exception as e:
+        logger.error(f"Positions error: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
 @app.route('/api/backtests', methods=['GET'])
 def get_backtests():
     uri = os.getenv("POSTGRES_URI", "")

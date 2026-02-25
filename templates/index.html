@@ -221,6 +221,52 @@
             color: var(--danger);
             opacity: 1;
         }
+
+        .pos-table th,
+        .pos-table td {
+            padding: 0.6rem 0.9rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.84rem;
+        }
+
+        .pos-table th {
+            background-color: #0d1117;
+            color: var(--text-dim);
+        }
+
+        .pos-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .dir-buy {
+            background: rgba(74, 222, 128, 0.15);
+            color: #4ade80;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 700;
+        }
+
+        .dir-sell {
+            background: rgba(248, 113, 113, 0.15);
+            color: #f87171;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 700;
+        }
+
+        .pnl-pos {
+            color: #4ade80;
+            font-weight: 600;
+        }
+
+        .pnl-neg {
+            color: #f87171;
+            font-weight: 600;
+        }
     </style>
 </head>
 
@@ -262,6 +308,35 @@
             <div class="card-title">System Logs</div>
             <div class="log-container" id="logs">
                 <div class="log-entry"><span class="log-time">[System]</span> UI initialized.</div>
+            </div>
+        </div>
+
+        <!-- Current Positions -->
+        <div class="card">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+                <div class="card-title" style="margin:0;">📌 Current Open Positions</div>
+                <span id="pos-updated" style="font-size:0.75rem; color:var(--text-dim);"></span>
+            </div>
+            <div class="table-container" style="max-height:260px;">
+                <table class="pos-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Script</th>
+                            <th>Direction</th>
+                            <th>Qty</th>
+                            <th>Avg Price</th>
+                            <th>LTP</th>
+                            <th>Unrealized P&L</th>
+                        </tr>
+                    </thead>
+                    <tbody id="pos-tbody">
+                        <tr>
+                            <td colspan="7" style="text-align:center;color:var(--text-dim);padding:1.5rem;">No open
+                                positions</td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         </div>
 
@@ -331,8 +406,40 @@
             }
         }
 
+        async function fetchPositions() {
+            try {
+                const res = await fetch('/api/positions');
+                const data = await res.json();
+                const tbody = document.getElementById('pos-tbody');
+                document.getElementById('pos-updated').textContent = 'Updated: ' + new Date().toLocaleTimeString('en-IN');
+
+                if (data.status === 'success' && data.data.length > 0) {
+                    tbody.innerHTML = data.data.map((p, i) => {
+                        const pnl = p.unrealized_pnl;
+                        const pnlCls = pnl >= 0 ? 'pnl-pos' : 'pnl-neg';
+                        const pnlStr = (pnl >= 0 ? '+' : '') + '₹' + pnl.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                        return `<tr>
+                            <td style="color:var(--text-dim);">${i + 1}</td>
+                            <td style="font-weight:600;">${p.script}</td>
+                            <td><span class="dir-${p.direction.toLowerCase()}">${p.direction}</span></td>
+                            <td>${p.qty}</td>
+                            <td>₹${Number(p.avg_price).toLocaleString('en-IN')}</td>
+                            <td>₹${Number(p.ltp).toLocaleString('en-IN')}</td>
+                            <td class="${pnlCls}">${pnlStr}</td>
+                        </tr>`;
+                    }).join('');
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-dim);padding:1.5rem;">No open positions</td></tr>';
+                }
+            } catch (err) {
+                console.error('Positions fetch failed', err);
+            }
+        }
+
         setInterval(fetchStatus, 2000);
+        setInterval(fetchPositions, 5000);
         fetchStatus();
+        fetchPositions();
     </script>
 </body>
 
