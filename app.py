@@ -39,15 +39,39 @@ CLIENT_ID   = os.getenv("DHAN_CLIENT_ID", "")
 ACCESS_TOKEN = os.getenv("DHAN_ACCESS_TOKEN", "")
 
 dhan = None
-try:
-    from dhanhq import dhanhq as _DhanHQ, DhanContext as _DhanCtx
-    if CLIENT_ID and ACCESS_TOKEN:
-        dhan = _DhanHQ(_DhanCtx(str(CLIENT_ID), str(ACCESS_TOKEN)))
-        logger.info("Dhan client initialised successfully.")
-    else:
-        logger.warning("DHAN_CLIENT_ID / DHAN_ACCESS_TOKEN not set — trading disabled.")
-except Exception as e:
-    logger.warning(f"Dhan client init failed (trading disabled): {e}")
+
+def init_dhan_local():
+    """Method 1: Init Dhan client using personal ACCESS_TOKEN from env (for local use)"""
+    global dhan
+    try:
+        from dhanhq import dhanhq as _DhanHQ, DhanContext as _DhanCtx
+        if CLIENT_ID and ACCESS_TOKEN:
+            dhan = _DhanHQ(_DhanCtx(str(CLIENT_ID), str(ACCESS_TOKEN)))
+            # Update strategy if it's already booted
+            if 'strategy' in globals() and strategy is not None:
+                strategy.dhan = dhan
+            logger.info("Dhan client initialised successfully via Local Access Token.")
+        else:
+            logger.warning("DHAN_CLIENT_ID / DHAN_ACCESS_TOKEN not set — local trading disabled.")
+    except Exception as e:
+        logger.warning(f"Dhan client init failed (local method): {e}")
+
+def init_dhan_oauth(token):
+    """Method 2: Init Dhan client using Token from OAuth Callback (for deployment)"""
+    global dhan
+    try:
+        from dhanhq import dhanhq as _DhanHQ, DhanContext as _DhanCtx
+        if CLIENT_ID and token:
+            dhan = _DhanHQ(_DhanCtx(str(CLIENT_ID), str(token)))
+            # Update strategy if it's already booted
+            if 'strategy' in globals() and strategy is not None:
+                strategy.dhan = dhan
+            logger.info("Dhan client initialised successfully via OAuth Callback Token.")
+    except Exception as e:
+        logger.warning(f"Dhan client init failed (OAuth method): {e}")
+
+# Bootup local client initially if token is present
+init_dhan_local()
 
 # ── Strategy ─────────────────────────────────────────────────────────────────
 strategy = None
@@ -55,6 +79,8 @@ try:
     from v4_trailing_sl_strategy import NiftyV4TrailingSLStrategy
     expiry_date = "2026-03-02"
     strategy = NiftyV4TrailingSLStrategy(expiry_date)
+    if dhan:
+        strategy.dhan = dhan
     logger.info("Strategy initialised successfully.")
 except Exception as e:
     logger.warning(f"Strategy init failed (trading disabled): {e}")
@@ -203,11 +229,7 @@ def dhan_save_token():
     if not new_token:
         return jsonify({"status": "error", "message": "No token provided"}), 400
     try:
-        from dhanhq import dhanhq as _DhanHQ, DhanContext as _DhanCtx
-        dhan = _DhanHQ(_DhanCtx(str(CLIENT_ID), new_token))
-        if strategy:
-            strategy.dhan = dhan          # update the live strategy instance too
-        logger.info("Dhan client hot-reloaded with new access token.")
+        init_dhan_oauth(new_token)
         return jsonify({"status": "success", "message": "Token saved and client reloaded."})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
@@ -305,6 +327,46 @@ def get_backtests():
         return jsonify({"status": "success", "data": df.to_dict(orient='records')})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
+
+
+@app.route('/api/test-strategy', methods=['POST'])
+def test_strategy():
+    data = request.json or {}
+    strategy = data.get('strategy', 'ALL')
+    start_date = data.get('start_date')
+    end_date = data.get('end_date')
+
+    # Mapping frontend strategy keys to python files
+    scripts = []
+    if strategy == "ALL":
+        scripts = ["backtest_dhan_5min.py", "backtest_1yr_strangle.py", "backtest_gamma_yf.py", "backtest_gamma.py", "backtest_v4.py"]
+    elif strategy == "v4_trailing_sl":
+        scripts = ["backtest_v4.py"]
+    elif strategy == "gamma_spike":
+        scripts = ["backtest_gamma.py", "backtest_gamma_yf.py"]
+    elif strategy == "strangle_1yr":
+        scripts = ["backtest_1yr_strangle.py"]
+    else:
+        # DB strategies like V5_IV15_48W can be covered by the main dhan backtest 
+        scripts = ["backtest_dhan_5min.py"]
+
+    import subprocess
+    env = os.environ.copy()
+    if start_date:
+        env['BACKTEST_START_DATE'] = start_date
+    if end_date:
+        env['BACKTEST_END_DATE'] = end_date
+
+    count = 0
+    for script in scripts:
+        if os.path.exists(script):
+            subprocess.Popen(["python", script], env=env)
+            count += 1
+
+    if count == 0:
+        return jsonify({"status": "error", "message": f"No backtest scripts found for {strategy}"}), 404
+
+    return jsonify({"status": "success", "message": f"Started {count} background job(s) for testing strategy: {strategy}."})
 
 
 if __name__ == '__main__':
