@@ -394,10 +394,10 @@
                     statusText.innerText = "Stopped";
                     badgeContainer.innerHTML = '<span class="status-badge status-stopped">Offline</span>';
                 } else if (data.paused) {
-                    statusText.innerText = "Paused";
+                    statusText.innerText = data.active_names ? data.active_names + " (Paused)" : "Paused";
                     badgeContainer.innerHTML = '<span class="status-badge status-paused">Standby</span>';
                 } else {
-                    statusText.innerText = "Running";
+                    statusText.innerText = data.active_names || "Running";
                     badgeContainer.innerHTML = '<span class="status-badge status-active">Monitoring Live</span>';
                 }
 

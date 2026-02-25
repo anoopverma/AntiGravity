@@ -48,9 +48,10 @@ def init_dhan():
         from dhanhq import dhanhq as _DhanHQ
         if CLIENT_ID and ACCESS_TOKEN:
             dhan = _DhanHQ(str(CLIENT_ID), str(ACCESS_TOKEN))
-            # Update strategy if it's already booted
-            if 'strategy' in globals() and strategy is not None:
-                strategy.dhan = dhan
+            # Update active strategies if already booted
+            if 'active_strategies' in globals() and active_strategies is not None:
+                for strat in active_strategies:
+                    strat.dhan = dhan
             logger.info("Dhan client initialised successfully via Environment Access Token.")
         else:
             logger.warning("DHAN_CLIENT_ID / DHAN_ACCESS_TOKEN not set — local trading disabled.")
@@ -60,37 +61,43 @@ def init_dhan():
 # Bootup local client initially if token is present
 init_dhan()
 
-# ── Strategy ─────────────────────────────────────────────────────────────────
-strategy = None
-try:
-    from strategy.v4_trailing_sl_strategy import NiftyV4TrailingSLStrategy
-    expiry_date = "2026-03-02"
-    strategy = NiftyV4TrailingSLStrategy(expiry_date)
-    if dhan:
-        strategy.dhan = dhan
-    logger.info("Strategy initialised successfully.")
-except Exception as e:
-    logger.warning(f"Strategy init failed (trading disabled): {e}")
-    expiry_date = "2026-03-02"
-
-current_broker  = "Dhan"
+# ── Engine State ─────────────────────────────────────────────────────────────
+active_strategies = []
+running_flag = False
+paused_flag = False
+current_broker = "Dhan"
 strategy_thread = None
+expiry_date = "2026-03-02"
+
+logger.info("Engine configured. Standing by for start.")
 
 
 def strategy_loop():
-    """Background thread that drives the strategy."""
-    global expiry_date, strategy
+    """Background thread that drives active strategies."""
+    global expiry_date, active_strategies, running_flag, paused_flag, current_broker
     logger.info(f"Background Strategy Thread Started. Broker: {current_broker}.")
-    while strategy and getattr(strategy, 'running', False):
+    
+    while running_flag:
         try:
-            if not getattr(strategy, 'paused', False):
-                strategy.run_iteration()
+            if not paused_flag:
+                for strat in active_strategies:
+                    # Depending on strategy class, call run_iteration appropriately
+                    if hasattr(strat, 'run_iteration'):
+                        import inspect
+                        sig = inspect.signature(strat.run_iteration)
+                        if len(sig.parameters) > 0:
+                            strat.run_iteration(expiry_date)
+                        else:
+                            strat.run_iteration()
         except Exception as e:
             logger.error(f"Error in strategy iteration: {e}")
+            
+        # Tick for 60 seconds unless stopped
         for _ in range(60):
-            if not strategy or not getattr(strategy, 'running', False):
+            if not running_flag:
                 break
             time.sleep(1)
+            
     logger.info("Background Strategy Thread Stopped.")
 
 
@@ -143,62 +150,105 @@ def health():
 
 @app.route('/api/status', methods=['GET'])
 def get_status():
+    global running_flag, paused_flag, active_strategies
+    
+    in_pos = any(getattr(s, 'in_position', False) for s in active_strategies) if active_strategies else False
+    u_pnl = sum(getattr(s, 'unrealized_pnl', 0) for s in active_strategies) if active_strategies else 0
+    r_pnl = sum(getattr(s, 'realized_pnl', 0) for s in active_strategies) if active_strategies else 0
+    names = [s.__class__.__name__.replace("Nifty", "").replace("Strategy", "") for s in active_strategies]
+    
     return jsonify({
         "broker":        current_broker,
-        "running":       getattr(strategy, 'running', False)      if strategy else False,
-        "paused":        getattr(strategy, 'paused',  False)      if strategy else False,
-        "in_position":   getattr(strategy, 'in_position', False)  if strategy else False,
-        "unrealized_pnl":getattr(strategy, 'unrealized_pnl', 0)  if strategy else 0,
-        "realized_pnl":  getattr(strategy, 'realized_pnl',   0)  if strategy else 0,
+        "running":       running_flag,
+        "paused":        paused_flag,
+        "in_position":   in_pos,
+        "unrealized_pnl": u_pnl,
+        "realized_pnl":  r_pnl,
+        "active_names":  ", ".join(names) if names else ""
     })
 
 
 @app.route('/api/start', methods=['POST'])
 def start():
-    global strategy_thread
+    global strategy_thread, running_flag, paused_flag, active_strategies, expiry_date
     data = request.get_json(silent=True) or {}
     selected_strategies = data.get('strategies', [])
     
-    if not strategy:
-        return jsonify({"status": "error", "message": "Strategy not initialised"}), 503
+    if not dhan:
+        return jsonify({"status": "error", "message": "Dhan not initialised"}), 503
         
     if not selected_strategies:
         return jsonify({"status": "error", "message": "No strategies selected"}), 400
         
-    if strategy_thread is None or not strategy_thread.is_alive():
-        strategy.running = True
-        strategy.paused  = False
-        strategy.active_strategies_list = selected_strategies
+    if strategy_thread is None or not strategy_thread.is_alive() or not running_flag:
+        active_strategies = []
+        
+        # Instantiate requested strategies
+        if "v4_gamma" in selected_strategies:
+            try:
+                from strategy.v4_trailing_sl_strategy import NiftyV4TrailingSLStrategy
+                s1 = NiftyV4TrailingSLStrategy(expiry_date)
+                s1.dhan = dhan
+                active_strategies.append(s1)
+            except Exception as e:
+                logger.error(f"Failed to load V4: {e}")
+                
+        if "gamma_blast" in selected_strategies:
+            try:
+                from strategy.gamma_spike_strategy import NiftyGammaSpikeStrategy
+                s2 = NiftyGammaSpikeStrategy(CLIENT_ID, ACCESS_TOKEN)
+                s2.dhan = dhan
+                active_strategies.append(s2)
+            except Exception as e:
+                logger.error(f"Failed to load Gamma Blast: {e}")
+        
+        if not active_strategies:
+            return jsonify({"status": "error", "message": "Failed to load instances"}), 500
+
+        running_flag = True
+        paused_flag = False
+        
         logger.info(f"Starting Engine with selected strategies: {selected_strategies}")
-        strategy_thread  = threading.Thread(target=strategy_loop, daemon=True)
+        strategy_thread = threading.Thread(target=strategy_loop, daemon=True)
         strategy_thread.start()
+        
         names = ", ".join(selected_strategies)
         return jsonify({"status": "success", "message": f"Strategy Engine Started [{names}]"})
+        
     return jsonify({"status": "error", "message": "Engine already running"}), 400
 
 
 @app.route('/api/pause', methods=['POST'])
 def pause():
-    if not strategy:
-        return jsonify({"status": "error", "message": "Strategy not initialised"}), 503
-    strategy.paused = True
-    return jsonify({"status": "success", "message": "Strategy Paused"})
+    global paused_flag, running_flag
+    if not running_flag:
+        return jsonify({"status": "error", "message": "Engine is not running"}), 503
+    paused_flag = True
+    return jsonify({"status": "success", "message": "Strategy Engine Paused"})
 
 
 @app.route('/api/resume', methods=['POST'])
 def resume():
-    if not strategy:
-        return jsonify({"status": "error", "message": "Strategy not initialised"}), 503
-    strategy.paused = False
-    return jsonify({"status": "success", "message": "Strategy Resumed"})
+    global paused_flag, running_flag
+    if not running_flag:
+        return jsonify({"status": "error", "message": "Engine is not running"}), 503
+    paused_flag = False
+    return jsonify({"status": "success", "message": "Strategy Engine Resumed"})
 
 
 @app.route('/api/stop', methods=['POST'])
 def stop_bot():
-    if not strategy:
-        return jsonify({"status": "error", "message": "Strategy not initialised"}), 503
-    strategy.running = False
-    return jsonify({"status": "success", "message": "Strategy Stopped"})
+    global running_flag, paused_flag, active_strategies
+    if not running_flag:
+        return jsonify({"status": "error", "message": "Engine is already stopped"}), 400
+        
+    running_flag = False
+    paused_flag = False
+    # Clear out the instances so state is fresh next time
+    active_strategies = []
+    
+    return jsonify({"status": "success", "message": "Strategy Engine Stopped"})
+
 
 
 @app.route('/api/close_all_positions', methods=['POST'])
@@ -219,9 +269,13 @@ def close_all_positions():
                         order_type=dhan.MARKET,
                         product_type=p["productType"],
                     )
-        if strategy:
-            strategy.running    = False
-            strategy.in_position = False
+        global running_flag
+        running_flag = False
+        for strat in active_strategies:
+            strat.in_position = False
+            strat.current_position = None
+            strat.unrealized_pnl = 0
+            
         return jsonify({"status": "success", "message": "All orders cancelled and positions closed."})
     except Exception as e:
         logger.error(f"Error: {e}")
