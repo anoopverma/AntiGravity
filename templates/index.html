@@ -315,7 +315,14 @@
         <div class="card">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
                 <div class="card-title" style="margin:0;">📌 Current Open Positions</div>
-                <span id="pos-updated" style="font-size:0.75rem; color:var(--text-dim);"></span>
+                <div style="display:flex; align-items:center; gap:0.8rem;">
+                    <span id="pos-updated" style="font-size:0.75rem; color:var(--text-dim);"></span>
+                    <button id="pos-refresh-btn" onclick="togglePositionRefresh()" style="padding:0.35rem 0.9rem; font-size:0.78rem; font-weight:600;
+                               background: rgba(35,134,54,0.2); border:1px solid #238636;
+                               color:#4ade80; border-radius:6px; cursor:pointer; transition:all 0.2s;">
+                        ▶ Live Refresh
+                    </button>
+                </div>
             </div>
             <div class="table-container" style="max-height:260px;">
                 <table class="pos-table">
@@ -436,10 +443,29 @@
             }
         }
 
+        let _posInterval = null;
+
+        function togglePositionRefresh() {
+            const btn = document.getElementById('pos-refresh-btn');
+            if (_posInterval) {
+                clearInterval(_posInterval);
+                _posInterval = null;
+                btn.textContent = '▶ Live Refresh';
+                btn.style.background = 'rgba(35,134,54,0.2)';
+                btn.style.borderColor = '#238636';
+                btn.style.color = '#4ade80';
+            } else {
+                fetchPositions();
+                _posInterval = setInterval(fetchPositions, 5000);
+                btn.textContent = '⏹ Stop Refresh';
+                btn.style.background = 'rgba(248,113,113,0.15)';
+                btn.style.borderColor = '#f87171';
+                btn.style.color = '#f87171';
+            }
+        }
+
         setInterval(fetchStatus, 2000);
-        setInterval(fetchPositions, 5000);
         fetchStatus();
-        fetchPositions();
     </script>
 </body>
 
