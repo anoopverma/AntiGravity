@@ -342,7 +342,7 @@ class NiftyTuesdayDhanBacktester:
                         break
         
         self.print_summary_v4()
-        self.save_to_postgres(table_name="historical_backtests", strategy_name="V4_IV15_48W")
+        self.save_to_postgres(table_name="historical_backtests", strategy_name="v4_trailing_sl")
 
     def run_gamma_spike_backtest(self, n_weeks=48):
         """
@@ -502,7 +502,7 @@ class NiftyTuesdayDhanBacktester:
                 entry_time = index
 
         self.print_summary_gamma_spike()
-        self.save_to_postgres(table_name="historical_backtests", strategy_name="GS_1L_48W")
+        self.save_to_postgres(table_name="historical_backtests", strategy_name="gamma_spike")
 
     def print_summary_gamma_spike(self):
         if not self.results:
@@ -740,7 +740,7 @@ class NiftyTuesdayDhanBacktester:
                 entry_time = index
 
         self.print_summary_v5()
-        self.save_to_postgres(table_name="historical_backtests", strategy_name="V5_IV15_48W")
+        self.save_to_postgres(table_name="historical_backtests", strategy_name="v5_strategy")
 
     def print_summary_v5(self):
         if not self.results:

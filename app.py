@@ -337,6 +337,36 @@ def get_backtests():
         return jsonify({"status": "error", "message": str(e)})
 
 
+@app.route('/api/run-backtest', methods=['POST'])
+@login_required
+def run_backtest():
+    """Acts as a Quick Dhan API Tester for the UI."""
+    data = request.json or {}
+    strategy = data.get('strategy', 'Unknown')
+    
+    if not dhan:
+        return jsonify({"status": "error", "message": "Dhan API not connected. Please connect via settings/env."}), 400
+    
+    try:
+        # Just to verify connection
+        res = dhan.get_fund_limits()
+        if res.get("status") == "success":
+            return jsonify({
+                "status": "success",
+                "message": "Dhan API is actively connected and responding successfully!",
+                "total_trades": 0,
+                "wins": 0,
+                "losses": 0,
+                "net_pnl": 0,
+                "capital": data.get('capital', 500000)
+            })
+        else:
+            return jsonify({"status": "error", "message": f"Dhan API Verification Failed: {res}"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+
 @app.route('/api/test-strategy', methods=['POST'])
 def test_strategy():
     data = request.json or {}

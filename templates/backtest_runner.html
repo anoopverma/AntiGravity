@@ -480,7 +480,7 @@
             <hr class="divider">
             <div style="display:flex;flex-direction:column;gap:0.8rem;">
                 <button class="btn-run" id="run-btn" onclick="runBacktest()">
-                    ▶ MOCK RUN
+                    ⚡ DHAN API TEST
                 </button>
                 <button class="btn-run" style="background: linear-gradient(135deg, #e3b341, #da3633);"
                     id="test-strat-btn" onclick="testStrategy()">
@@ -751,7 +751,37 @@
         }
 
         async function runBacktest() {
-            log("Running legacy front-end mock test.", "log-info");
+            log("Running Dhan API Test...", "log-info");
+            setStatus('running');
+            const btn = document.getElementById('run-btn');
+            btn.disabled = true;
+            btn.innerHTML = `<span class="spinner" style="margin-right:8px; display:inline-block; border: 2px solid white; border-top: 2px solid transparent; border-radius: 50%; width: 14px; height: 14px; animation: spin 1s linear infinite;"></span> Testing...`;
+
+            try {
+                const resp = await fetch('/api/run-backtest', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        strategy: document.getElementById('strategy-select').value,
+                        capital: document.getElementById('capital').value
+                    })
+                });
+                const data = await resp.json();
+
+                if (resp.ok) {
+                    setStatus('done');
+                    log(`✅ ${data.message}`, 'log-success');
+                } else {
+                    setStatus('error');
+                    log(`❌ API Error: ${data.message}`, 'log-error');
+                }
+            } catch (e) {
+                setStatus('error');
+                log(`❌ Network Error: ${e.message}`, 'log-error');
+            }
+
+            btn.disabled = false;
+            btn.innerHTML = '⚡ DHAN API TEST';
         }
 
         // Initialize
