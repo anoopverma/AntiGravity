@@ -1,4 +1,21 @@
+# Environment
 .env
+.venv/
+venv/
+
+# Python
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+
+# Logs & generated output
 logs/
+*.log
+backtest_out.txt
+
+# Dev/test files
+*.png
+
+# OS
+.DS_Store

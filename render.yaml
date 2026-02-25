@@ -4,23 +4,24 @@ services:
     runtime: docker
     dockerfilePath: ./Dockerfile
     plan: free
+    healthCheckPath: /health
     envVars:
       - key: DHAN_CLIENT_ID
         sync: false
       - key: DHAN_ACCESS_TOKEN
         sync: false
       - key: DHAN_API_KEY
-        sync: false                  # OAuth API Key: dddf883a
+        sync: false
       - key: DHAN_CLIENT_SECRET
-        sync: false                  # OAuth Secret for token exchange
+        sync: false
       - key: PAPER_TRADE
         value: "True"
       - key: SECRET_KEY
-        generateValue: true          # Render auto-generates a secure random value
+        generateValue: true
       - key: DASHBOARD_USERNAME
-        sync: false                  # Set in Render dashboard: default is 'admin'
+        sync: false
       - key: DASHBOARD_PASSWORD
-        sync: false                  # Set in Render dashboard: default is 'antigravity2024'
+        sync: false
       - key: POSTGRES_URI
         fromDatabase:
           name: antigravity-db
