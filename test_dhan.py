@@ -1,10 +1,10 @@
 import os
 import json
 from dotenv import load_dotenv
-from dhanhq import dhanhq, DhanContext
+from dhanhq import dhanhq
 
 load_dotenv()
-dhan = dhanhq(DhanContext(os.getenv('DHAN_CLIENT_ID'), os.getenv('DHAN_ACCESS_TOKEN')))
+dhan = dhanhq(os.getenv('DHAN_CLIENT_ID'), os.getenv('DHAN_ACCESS_TOKEN'))
 
 print("Testing NIFTY Options Data for Expiry")
 # Let's try to get historical quote for a specific Nifty Call Option

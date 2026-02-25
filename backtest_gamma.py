@@ -4,7 +4,7 @@ import logging
 import pandas as pd
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
-from dhanhq import dhanhq, DhanContext
+from dhanhq import dhanhq
 
 # Configure logging
 logging.basicConfig(
@@ -23,8 +23,8 @@ class BacktestGammaStrategy:
         if not client_id or not access_token or client_id == "YOUR_DHAN_CLIENT_ID_HERE":
             raise ValueError("Invalid Dhan API credentials. Please set them in .env")
             
-        self.dhan_context = DhanContext(client_id, access_token)
-        self.dhan = dhanhq(self.dhan_context)
+        self.dhan = dhanhq(client_id, access_token)
+
         self.security_id = "13" # NIFTY
         self.exchange_segment = "IDX_I" # For index
         

@@ -44,9 +44,9 @@ def init_dhan_local():
     """Method 1: Init Dhan client using personal ACCESS_TOKEN from env (for local use)"""
     global dhan
     try:
-        from dhanhq import dhanhq as _DhanHQ, DhanContext as _DhanCtx
+        from dhanhq import dhanhq as _DhanHQ
         if CLIENT_ID and ACCESS_TOKEN:
-            dhan = _DhanHQ(_DhanCtx(str(CLIENT_ID), str(ACCESS_TOKEN)))
+            dhan = _DhanHQ(str(CLIENT_ID), str(ACCESS_TOKEN))
             # Update strategy if it's already booted
             if 'strategy' in globals() and strategy is not None:
                 strategy.dhan = dhan
@@ -60,9 +60,9 @@ def init_dhan_oauth(token):
     """Method 2: Init Dhan client using Token from OAuth Callback (for deployment)"""
     global dhan
     try:
-        from dhanhq import dhanhq as _DhanHQ, DhanContext as _DhanCtx
+        from dhanhq import dhanhq as _DhanHQ
         if CLIENT_ID and token:
-            dhan = _DhanHQ(_DhanCtx(str(CLIENT_ID), str(token)))
+            dhan = _DhanHQ(str(CLIENT_ID), str(token))
             # Update strategy if it's already booted
             if 'strategy' in globals() and strategy is not None:
                 strategy.dhan = dhan
