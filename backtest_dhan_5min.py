@@ -25,11 +25,12 @@ IMPLIED_VOL_ASSUMPTION = 0.15
 class NiftyTuesdayDhanBacktester:
     def __init__(self):
         load_dotenv()
-        self.client_id = os.getenv('DHAN_CLIENT_ID')
-        self.access_token = os.getenv('DHAN_ACCESS_TOKEN')
+        # Support both standard and Render env var names
+        self.client_id = os.getenv('DHAN_CLIENT_ID') or os.getenv('DHAN_API_KEY')
+        self.access_token = os.getenv('DHAN_ACCESS_TOKEN') or os.getenv('DHAN_CLIENT_SECRET')
         
         if not self.client_id or not self.access_token:
-            raise ValueError("Dhan API credentials not found in .env")
+            raise ValueError("Dhan API credentials (ID/Key or Token/Secret) not found in environment")
             
         self.dhan = dhanhq(str(self.client_id), str(self.access_token))
         
@@ -342,9 +343,9 @@ class NiftyTuesdayDhanBacktester:
                         break
         
         self.print_summary_v4()
-        self.save_to_postgres(table_name="historical_backtests", strategy_name="v4_trailing_sl")
+        self.save_to_postgres(table_name="historical_backtests", strategy_name="v4_gamma")
 
-    def run_gamma_spike_backtest(self, n_weeks=48):
+    def run_gamma_blast_backtest(self, n_weeks=48):
         """
         Gamma Spike Strategy Backtest
         ──────────────────────────────────────────────────────
@@ -483,9 +484,9 @@ class NiftyTuesdayDhanBacktester:
                     self.estimate_option_price(spot_price, atm, dte, IMPLIED_VOL_ASSUMPTION, 'C') +
                     self.estimate_option_price(spot_price, atm, dte, IMPLIED_VOL_ASSUMPTION, 'P')
                 )
-                gamma_spike = curr_straddle >= benchmark_straddle * expansion_threshold
+                gamma_blast = curr_straddle >= benchmark_straddle * expansion_threshold
 
-                if not gamma_spike:
+                if not gamma_blast:
                     continue
 
                 opt_type   = 'C' if spot_price > benchmark_spot else 'P'
@@ -501,10 +502,10 @@ class NiftyTuesdayDhanBacktester:
                               'peak': entry_prem, 'qty': qty}
                 entry_time = index
 
-        self.print_summary_gamma_spike()
-        self.save_to_postgres(table_name="historical_backtests", strategy_name="gamma_spike")
+        self.print_summary_gamma_blast()
+        self.save_to_postgres(table_name="historical_backtests", strategy_name="gamma_blast")
 
-    def print_summary_gamma_spike(self):
+    def print_summary_gamma_blast(self):
         if not self.results:
             print("\nNo Trades Executed.")
             return
@@ -797,4 +798,4 @@ if __name__ == "__main__":
     backtester.run_v4_backtest(n_weeks=48, use_rsi=False, expansion_threshold=1.15)
     
     print("\n--- Running Gamma Spike Backtest (Entry+5% BE) ---")
-    backtester.run_gamma_spike_backtest(n_weeks=48)
+    backtester.run_gamma_blast_backtest(n_weeks=48)

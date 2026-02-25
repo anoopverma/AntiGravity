@@ -19,11 +19,12 @@ IMPLIED_VOL_ASSUMPTION = 0.15
 class V4Backtester:
     def __init__(self):
         load_dotenv()
-        self.client_id = os.getenv('DHAN_CLIENT_ID')
-        self.access_token = os.getenv('DHAN_ACCESS_TOKEN')
+        # Support both standard and Render env var names
+        self.client_id = os.getenv('DHAN_CLIENT_ID') or os.getenv('DHAN_API_KEY')
+        self.access_token = os.getenv('DHAN_ACCESS_TOKEN') or os.getenv('DHAN_CLIENT_SECRET')
         
         if not self.client_id or not self.access_token:
-            raise ValueError("Dhan API credentials not found in .env")
+            raise ValueError("Dhan API credentials (ID/Key or Token/Secret) not found in environment")
             
         self.dhan = dhanhq(str(self.client_id), str(self.access_token))
         

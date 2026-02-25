@@ -13,10 +13,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Load environment variables
-load_dotenv()
-CLIENT_ID = os.getenv("DHAN_CLIENT_ID")
-ACCESS_TOKEN = os.getenv("DHAN_ACCESS_TOKEN")
+# Load environment variables (Support both standard and Render env var names)
+CLIENT_ID = os.getenv('DHAN_CLIENT_ID') or os.getenv('DHAN_API_KEY')
+ACCESS_TOKEN = os.getenv('DHAN_ACCESS_TOKEN') or os.getenv('DHAN_CLIENT_SECRET')
 
 class BacktestGammaStrategy:
     def __init__(self, client_id, access_token):

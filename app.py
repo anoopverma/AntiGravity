@@ -35,8 +35,9 @@ def login_required(f):
 
 # ── Dhan API client ──────────────────────────────────────────────────────────
 # Lazy/safe init: app must boot even without keys (Render dashboard-only mode)
-CLIENT_ID   = os.getenv("DHAN_CLIENT_ID", "")
-ACCESS_TOKEN = os.getenv("DHAN_ACCESS_TOKEN", "")
+# Support both standard and Render env var names
+CLIENT_ID   = os.getenv("DHAN_CLIENT_ID") or os.getenv("DHAN_API_KEY") or ""
+ACCESS_TOKEN = os.getenv("DHAN_ACCESS_TOKEN") or os.getenv("DHAN_CLIENT_SECRET") or ""
 
 dhan = None
 
