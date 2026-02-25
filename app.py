@@ -40,6 +40,7 @@ CLIENT_ID   = os.getenv("DHAN_CLIENT_ID") or os.getenv("DHAN_API_KEY") or ""
 ACCESS_TOKEN = os.getenv("DHAN_ACCESS_TOKEN") or os.getenv("DHAN_CLIENT_SECRET") or ""
 
 dhan = None
+ACTIVE_TOKEN = ACCESS_TOKEN  # Track the current active token for subprocesses
 
 def init_dhan_local():
     """Method 1: Init Dhan client using personal ACCESS_TOKEN from env (for local use)"""
@@ -59,11 +60,12 @@ def init_dhan_local():
 
 def init_dhan_oauth(token):
     """Method 2: Init Dhan client using Token from OAuth Callback (for deployment)"""
-    global dhan
+    global dhan, ACTIVE_TOKEN
     try:
         from dhanhq import dhanhq as _DhanHQ
         if CLIENT_ID and token:
             dhan = _DhanHQ(str(CLIENT_ID), str(token))
+            ACTIVE_TOKEN = token # Update the active token
             # Update strategy if it's already booted
             if 'strategy' in globals() and strategy is not None:
                 strategy.dhan = dhan
@@ -469,6 +471,13 @@ def test_strategy():
 
     import subprocess
     env = os.environ.copy()
+    
+    # Inject active credentials into subprocess environment
+    if CLIENT_ID:
+        env['DHAN_CLIENT_ID'] = str(CLIENT_ID)
+    if ACTIVE_TOKEN:
+        env['DHAN_ACCESS_TOKEN'] = str(ACTIVE_TOKEN)
+
     if start_date:
         env['BACKTEST_START_DATE'] = start_date
     if end_date:
