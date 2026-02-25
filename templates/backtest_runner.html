@@ -498,6 +498,13 @@
                 </div>
 
                 <div class="form-group">
+                    <label>Run Date (Filter)</label>
+                    <select id="run-date-select" onchange="fetchBacktests()">
+                        <option value="ALL">All Runs</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
                     <label>Start Date</label>
                     <input type="date" id="start-date" value="2025-01-01">
                 </div>
@@ -676,6 +683,29 @@
                     let rows = data.data;
                     if (selectedStrategy !== 'ALL') {
                         rows = rows.filter(r => r.Strategy_Name === selectedStrategy);
+                    }
+
+                    // Populate Run Date filter based on visible strategy
+                    const rdSelect = document.getElementById('run-date-select');
+                    const currentRdVal = rdSelect.value;
+                    const dbRunDates = [...new Set(rows.map(r => r.Run_Date).filter(Boolean))].sort().reverse();
+
+                    rdSelect.innerHTML = '<option value="ALL">All Runs</option>';
+                    dbRunDates.forEach(rd => {
+                        const opt = document.createElement('option');
+                        opt.value = rd;
+                        opt.textContent = rd;
+                        rdSelect.appendChild(opt);
+                    });
+
+                    // Restore selection if valid
+                    if (dbRunDates.includes(currentRdVal)) {
+                        rdSelect.value = currentRdVal;
+                    }
+
+                    const selectedRunDate = rdSelect.value;
+                    if (selectedRunDate !== 'ALL') {
+                        rows = rows.filter(r => r.Run_Date === selectedRunDate);
                     }
 
                     const tbody = document.getElementById('backtest-tbody');
