@@ -322,6 +322,15 @@
                 </tbody>
             </table>
 
+            </table>
+            <div class="controls" style="margin-bottom: 2rem;">
+                <button class="btn-start" style="background:#dc2626;" onclick="handleAction('start', 'live')">▶ Start
+                    LIVE Selected</button>
+                <button class="btn-pause" onclick="handleAction('pause')">⏸ Pause</button>
+                <button class="btn-pause" onclick="handleAction('resume')">⏯ Resume</button>
+                <button class="btn-exit" onclick="handleAction('stop')">🛑 STOP BOT</button>
+            </div>
+
             <div class="card-title" style="margin-top:2rem;">▶ Select Strategies for FORWARD Testing (Paper Trading)
             </div>
             <table class="pos-table" id="paper-strategies-table" style="margin-bottom: 1.5rem;">
@@ -349,13 +358,11 @@
             </table>
 
             <div class="controls" style="margin-bottom: 0;">
-                <div class="controls" style="margin-bottom: 0;">
-                    <button class="btn-start" style="background:#16a34a;" onclick="handleAction('start')">▶ Start
-                        Selected Strategies</button>
-                    <button class="btn-pause" onclick="handleAction('pause')">⏸ Pause</button>
-                    <button class="btn-pause" onclick="handleAction('resume')">⏯ Resume</button>
-                    <button class="btn-exit" onclick="handleAction('stop')">🛑 STOP BOT</button>
-                </div>
+                <button class="btn-start" style="background:#2563eb;" onclick="handleAction('start', 'paper')">▶ Start
+                    PAPER Selected</button>
+                <button class="btn-pause" onclick="handleAction('pause')">⏸ Pause</button>
+                <button class="btn-pause" onclick="handleAction('resume')">⏯ Resume</button>
+                <button class="btn-exit" onclick="handleAction('stop')">🛑 STOP BOT</button>
             </div>
 
             <div class="card">
@@ -445,18 +452,25 @@
                 }
             }
 
-            async function handleAction(action) {
+            async function handleAction(action, targetType = 'all') {
                 try {
                     let payload = {};
                     if (action === 'start') {
-                        const liveBoxes = document.querySelectorAll('.strat-checkbox-live:checked');
-                        const paperBoxes = document.querySelectorAll('.strat-checkbox-paper:checked');
+                        let liveSelected = [];
+                        let paperSelected = [];
 
-                        const liveSelected = Array.from(liveBoxes).map(cb => cb.value);
-                        const paperSelected = Array.from(paperBoxes).map(cb => cb.value);
+                        if (targetType === 'all' || targetType === 'live') {
+                            const liveBoxes = document.querySelectorAll('.strat-checkbox-live:checked');
+                            liveSelected = Array.from(liveBoxes).map(cb => cb.value);
+                        }
+
+                        if (targetType === 'all' || targetType === 'paper') {
+                            const paperBoxes = document.querySelectorAll('.strat-checkbox-paper:checked');
+                            paperSelected = Array.from(paperBoxes).map(cb => cb.value);
+                        }
 
                         if (liveSelected.length === 0 && paperSelected.length === 0) {
-                            alert("Please select at least one strategy to run.");
+                            alert(`Please select at least one strategy to run for ${targetType.toUpperCase()} mode.`);
                             return;
                         }
                         if (liveSelected.length > 0) {
