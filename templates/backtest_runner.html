@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AntiGravity — Backtest Runner</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
     <link
         href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
         rel="stylesheet">
@@ -97,13 +98,21 @@
             background: var(--bg-card);
         }
 
+        .header-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            max-width: 1400px;
+            margin: 0 auto 2rem;
+        }
+
         .main {
-            max-width: 1100px;
+            max-width: 1400px;
             margin: 0 auto;
-            display: grid;
-            grid-template-columns: 340px 1fr;
+            display: flex;
+            flex-direction: column;
             gap: 1.5rem;
-            align-items: start;
+            align-items: stretch;
         }
 
         .card {
@@ -123,7 +132,30 @@
         }
 
         /* ── Config Panel ── */
+        .config-flex {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1.5rem;
+            align-items: flex-start;
+        }
+
+        .config-flex .form-group {
+            flex: 1;
+            min-width: 180px;
+            margin-bottom: 0;
+        }
+
+        .config-flex .actions {
+            flex: 1.2;
+            min-width: 250px;
+            display: flex;
+            flex-direction: column;
+            gap: 0.8rem;
+            margin-top: auto;
+        }
+
         .form-group {
+            /* Fallback */
             margin-bottom: 1.1rem;
         }
 
@@ -454,119 +486,130 @@
         <div class="card">
             <div class="card-title">⚙ Configure Run</div>
 
-            <div class="form-group">
-                <label>Strategy</label>
-                <select id="strategy-select" onchange="onStrategyChange()">
-                    <option value="ALL">All Strategies</option>
-                    <option value="v4_gamma">V4 Gamma</option>
-                    <option value="gamma_blast">Gamma Blast</option>
-                </select>
-                <div id="strategy-meta" style="margin-top:0.6rem"></div>
-            </div>
+            <div class="config-flex">
+                <div class="form-group">
+                    <label>Strategy</label>
+                    <select id="strategy-select" onchange="onStrategyChange()">
+                        <option value="ALL">All Strategies</option>
+                        <option value="v4_gamma">V4 Gamma</option>
+                        <option value="gamma_blast">Gamma Blast</option>
+                    </select>
+                    <div id="strategy-meta" style="margin-top:0.6rem"></div>
+                </div>
 
-            <div class="form-group">
-                <label>Start Date</label>
-                <input type="date" id="start-date" value="2025-01-01">
-            </div>
-            <div class="form-group">
-                <label>End Date</label>
-                <input type="date" id="end-date" value="2025-12-31">
-            </div>
-            <div class="form-group">
-                <label>Initial Capital (₹)</label>
-                <input type="number" id="capital" value="500000" step="50000" min="100000">
-            </div>
+                <div class="form-group">
+                    <label>Start Date</label>
+                    <input type="date" id="start-date" value="2025-01-01">
+                </div>
+                <div class="form-group">
+                    <label>End Date</label>
+                    <input type="date" id="end-date" value="2025-12-31">
+                </div>
+                <div class="form-group">
+                    <label>Initial Capital (₹)</label>
+                    <input type="number" id="capital" value="500000" step="50000" min="100000">
+                </div>
 
-            <hr class="divider">
-            <div style="display:flex;flex-direction:column;gap:0.8rem;">
-                <button class="btn-run" id="run-btn" onclick="testDhan()">
-                    ▶ DHAN BACK TEST
-                </button>
-                <div style="display:flex; gap:0.5rem;">
-                    <button class="btn-run" style="flex:1; background: linear-gradient(135deg, #e3b341, #da3633);"
-                        id="test-strat-btn" onclick="showStatistics()">
-                        📊 SHOW STATISTICS
+                <div class="actions">
+                    <button class="btn-run" id="run-btn" onclick="testDhan()">
+                        ▶ DHAN BACK TEST
                     </button>
-                    <button class="btn-run" style="flex:1; background: linear-gradient(135deg, #e74c3c, #c0392b);"
-                        id="del-db-btn" onclick="deleteDbData()">
-                        🗑️ DELETE DATA
-                    </button>
+                    <div style="display:flex; gap:0.5rem;">
+                        <button class="btn-run" style="flex:1; background: linear-gradient(135deg, #e3b341, #da3633);"
+                            id="test-strat-btn" onclick="showStatistics()">
+                            📊 SHOW STATISTICS
+                        </button>
+                        <button class="btn-run" style="flex:1; background: linear-gradient(135deg, #e74c3c, #c0392b);"
+                            id="del-db-btn" onclick="deleteDbData()">
+                            🗑️ DELETE DATA
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
 
         <!-- Results Panel -->
-        <div>
-            <div class="card" style="margin-bottom: 1.5rem">
-                <div class="results-header">
-                    <div class="card-title" style="margin:0">📊 Live Output</div>
-                    <div style="display:flex;align-items:center;gap:0.5rem">
-                        <div class="status-dot" id="status-dot"></div>
-                        <span id="status-text" style="font-size:0.78rem;color:var(--text-dim)">Idle</span>
-                    </div>
-                </div>
-                <div class="log-box" id="log-box">Ready. Select a strategy and click Run Backtest or Test Strategy.
-                </div>
-
-                <div class="summary-grid" id="summary-grid" style="display:none">
-                    <div class="stat-card">
-                        <div class="stat-label">Total Trades</div>
-                        <div class="stat-value neutral" id="s-trades">—</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-label">Win Rate</div>
-                        <div class="stat-value" id="s-winrate">—</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-label">Net P&L</div>
-                        <div class="stat-value" id="s-pnl">—</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-label">ROI</div>
-                        <div class="stat-value" id="s-roi">—</div>
-                    </div>
+        <div class="card" style="margin-bottom: 1.5rem">
+            <div class="results-header">
+                <div class="card-title" style="margin:0">📊 Live Output</div>
+                <div style="display:flex;align-items:center;gap:0.5rem">
+                    <div class="status-dot" id="status-dot"></div>
+                    <span id="status-text" style="font-size:0.78rem;color:var(--text-dim)">Idle</span>
                 </div>
             </div>
+            <div class="log-box" id="log-box">Ready. Select a strategy and click Run Backtest or Test Strategy.
+            </div>
 
-            <!-- DB Table -->
-            <div class="card">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                    <div class="card-title" style="margin-bottom: 0;">Historical Backtests Database (PostgreSQL)</div>
-                    <button class="btn-sm" onclick="fetchBacktests()">🔄 Refresh Records</button>
+            <div class="summary-grid" id="summary-grid" style="display:none">
+                <div class="stat-card">
+                    <div class="stat-label">Total Trades</div>
+                    <div class="stat-value neutral" id="s-trades">—</div>
                 </div>
-                <div class="table-container">
-                    <table id="backtest-table">
-                        <thead>
-                            <tr>
-                                <th>#</th>
-                                <th>Run Date</th>
-                                <th>Strategy</th>
-                                <th>Trade Date</th>
-                                <th>Type</th>
-                                <th>Action</th>
-                                <th>Qty</th>
-                                <th>Entry</th>
-                                <th>Exit</th>
-                                <th>Buy</th>
-                                <th>Peak</th>
-                                <th>Sell</th>
-                                <th>PNL</th>
-                                <th>ROI%</th>
-                                <th>Cap ROI%</th>
-                                <th>Reason</th>
-                                <th>Result</th>
-                            </tr>
-                        </thead>
-                        <tbody id="backtest-tbody">
-                            <tr>
-                                <td colspan="17" class="empty-state">Loading database records...</td>
-                            </tr>
-                        </tbody>
-                        <tfoot id="backtest-tfoot"></tfoot>
-                    </table>
+                <div class="stat-card">
+                    <div class="stat-label">Win Rate</div>
+                    <div class="stat-value" id="s-winrate">—</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Net P&L</div>
+                    <div class="stat-value" id="s-pnl">—</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">ROI</div>
+                    <div class="stat-value" id="s-roi">—</div>
                 </div>
             </div>
         </div>
+
+        <!-- DB Table -->
+        <div class="card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <div class="card-title" style="margin-bottom: 0;">Historical Backtests Database (PostgreSQL)</div>
+                <button class="btn-sm" onclick="fetchBacktests()">🔄 Refresh Records</button>
+            </div>
+            <div class="table-container">
+                <table id="backtest-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Run Date</th>
+                            <th>Strategy</th>
+                            <th>Trade Date</th>
+                            <th>Type</th>
+                            <th>Action</th>
+                            <th>Qty</th>
+                            <th>Entry</th>
+                            <th>Exit</th>
+                            <th>Buy</th>
+                            <th>Peak</th>
+                            <th>Sell</th>
+                            <th>PNL</th>
+                            <th>ROI%</th>
+                            <th>Cap ROI%</th>
+                            <th>Reason</th>
+                            <th>Result</th>
+                        </tr>
+                    </thead>
+                    <tbody id="backtest-tbody">
+                        <tr>
+                            <td colspan="17" class="empty-state">Loading database records...</td>
+                        </tr>
+                    </tbody>
+                    <tfoot id="backtest-tfoot"></tfoot>
+                </table>
+            </div>
+        </div>
+
+        <!-- ── Equity Curve ─────────────────────────────────── -->
+        <div class="card" id="equity-card" style="display:none; margin-top: 1.5rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <div class="card-title" style="margin-bottom: 0;">📈 Equity Curve</div>
+                <span id="equity-label" style="color:#8b949e; font-size:0.85rem;"></span>
+            </div>
+            <div style="position: relative; height: 300px;">
+                <canvas id="equity-chart"></canvas>
+            </div>
+        </div>
+
     </div>
 
     <script>
@@ -689,10 +732,18 @@
                         </tr>
                     `;
 
+                    if (selectedStrategy !== 'ALL' && rows.length > 0) {
+                        const sLabel = STRATEGIES[selectedStrategy] ? STRATEGIES[selectedStrategy].label : selectedStrategy;
+                        renderEquityCurve(rows, sLabel);
+                    } else {
+                        document.getElementById('equity-card').style.display = 'none';
+                    }
+
                 } else {
                     document.getElementById('backtest-tbody').innerHTML =
                         `<tr><td colspan="17" class="empty-state">No database records found. Run a backtest first.</td></tr>`;
                     document.getElementById('backtest-tfoot').innerHTML = '';
+                    document.getElementById('equity-card').style.display = 'none';
                 }
 
                 onStrategyChange();
@@ -797,6 +848,105 @@
         function showStatistics() {
             log('Fetching latest database statistics...', 'log-info');
             fetchBacktests();
+        }
+
+        let _equityChart = null;
+
+        function renderEquityCurve(rows, stratLabel) {
+            const capitalInput = document.getElementById('capital').value;
+            const INITIAL_CAPITAL = parseInt(capitalInput) || 100000;
+            const labels = ['Start'];
+            const equityData = [INITIAL_CAPITAL];
+            let equity = INITIAL_CAPITAL;
+
+            rows.forEach(r => {
+                equity += parseFloat(r.PNL || 0);
+                labels.push(r.Date ? r.Date.substring(5) : '?'); // MM-DD
+                equityData.push(Math.round(equity));
+            });
+
+            const card = document.getElementById('equity-card');
+            card.style.display = 'block';
+            document.getElementById('equity-label').textContent =
+                `${stratLabel} | Start: ₹${INITIAL_CAPITAL.toLocaleString()} → End: ₹${equity.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
+
+            const ctx = document.getElementById('equity-chart').getContext('2d');
+
+            // Gradient fill
+            const gradient = ctx.createLinearGradient(0, 0, 0, 300);
+            gradient.addColorStop(0, 'rgba(35, 134, 54, 0.45)');
+            gradient.addColorStop(1, 'rgba(35, 134, 54, 0.02)');
+
+            const pointColors = equityData.map((v, i) => {
+                if (i === 0) return '#8b949e';
+                return v >= equityData[i - 1] ? '#3fb950' : '#f85149';
+            });
+
+            if (_equityChart) { _equityChart.destroy(); }
+
+            _equityChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: 'Equity (₹)',
+                        data: equityData,
+                        fill: true,
+                        backgroundColor: gradient,
+                        borderColor: '#3fb950',
+                        borderWidth: 2,
+                        pointRadius: 5,
+                        pointBackgroundColor: pointColors,
+                        pointBorderColor: '#0f1115',
+                        pointBorderWidth: 1.5,
+                        tension: 0.3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: '#1c2128',
+                            borderColor: '#30363d',
+                            borderWidth: 1,
+                            titleColor: '#e6edf3',
+                            bodyColor: '#8b949e',
+                            callbacks: {
+                                label: ctx => {
+                                    const val = ctx.parsed.y;
+                                    const pnl = val - INITIAL_CAPITAL;
+                                    const roi = ((pnl / INITIAL_CAPITAL) * 100).toFixed(2);
+                                    return [
+                                        ` Equity: ₹${val.toLocaleString('en-IN')}`,
+                                        ` Net P&L: ₹${pnl.toLocaleString('en-IN')} (${roi}%)`
+                                    ];
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            ticks: { color: '#8b949e', maxRotation: 45, font: { size: 11 } },
+                            grid: { color: '#21262d' }
+                        },
+                        y: {
+                            ticks: {
+                                color: '#8b949e',
+                                font: { size: 11 },
+                                callback: v => '₹' + (v / 1000).toFixed(0) + 'K'
+                            },
+                            grid: { color: '#21262d' },
+                            // Drawdown reference line at initial capital
+                            afterDataLimits: scale => {
+                                scale.min = Math.min(scale.min, INITIAL_CAPITAL * 0.9);
+                            }
+                        }
+                    }
+                }
+            });
         }
 
         // Initialize
