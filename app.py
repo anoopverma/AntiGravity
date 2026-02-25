@@ -339,13 +339,11 @@ def test_strategy():
     # Mapping frontend strategy keys to python files
     scripts = []
     if strategy == "ALL":
-        scripts = ["backtest_dhan_5min.py", "backtest_1yr_strangle.py", "backtest_gamma_yf.py", "backtest_gamma.py", "backtest_v4.py"]
+        scripts = ["backtest_dhan_5min.py", "backtest_gamma.py", "backtest_v4.py"]
     elif strategy == "v4_trailing_sl":
         scripts = ["backtest_v4.py"]
     elif strategy == "gamma_spike":
-        scripts = ["backtest_gamma.py", "backtest_gamma_yf.py"]
-    elif strategy == "strangle_1yr":
-        scripts = ["backtest_1yr_strangle.py"]
+        scripts = ["backtest_gamma.py"]
     else:
         # DB strategies like V5_IV15_48W can be covered by the main dhan backtest 
         scripts = ["backtest_dhan_5min.py"]
