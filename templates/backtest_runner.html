@@ -458,8 +458,8 @@
                 <label>Strategy</label>
                 <select id="strategy-select" onchange="onStrategyChange()">
                     <option value="ALL">All Strategies</option>
-                    <option value="v4_trailing_sl">V4 Gamma</option>
-                    <option value="gamma_spike">Gamma Blast</option>
+                    <option value="v4_gamma">V4 Gamma</option>
+                    <option value="gamma_blast">Gamma Blast</option>
                 </select>
                 <div id="strategy-meta" style="margin-top:0.6rem"></div>
             </div>
@@ -576,16 +576,16 @@
                 badge: 'badge-v4',
                 desc: 'Runs all available strategies sequentially against the historical data.',
             },
-            v4_trailing_sl: {
+            v4_gamma: {
                 label: 'V4 Gamma',
                 badge: 'badge-v4',
                 desc: 'Nifty options straddle with 50% initial SL and 15% trailing — Champion V4 Parameters.',
             },
-            gamma_spike: {
-                label: 'Gamma Blast',
-                badge: 'badge-gamma',
-                desc: 'Trades Nifty options on gamma acceleration events near expiry.',
-            }
+            gamma_blast: {
+                label: "Gamma Blast",
+                badge: "badge-green",
+                desc: "An aggressive 48-week historical sweep that scales on momentum bursts across 5-minute ticks. Executes directional moves and captures expansion straddles."
+            },
         };
 
         function log(msg, cls = 'log-info') {
@@ -631,7 +631,7 @@
                     // Update Table
                     const selectedStrategy = currentVal;
                     let rows = data.data;
-                    if (selectedStrategy !== 'ALL' && selectedStrategy !== 'v4_trailing_sl' && selectedStrategy !== 'gamma_spike' && selectedStrategy !== 'strangle_1yr') {
+                    if (selectedStrategy !== 'ALL' && selectedStrategy !== 'v4_gamma' && selectedStrategy !== 'gamma_blast' && selectedStrategy !== 'strangle_1yr') {
                         rows = rows.filter(r => r.Strategy_Name === selectedStrategy);
                     }
 
@@ -739,9 +739,9 @@
 
                 if (resp.ok) {
                     setStatus('done');
-                    log('✅ Backend test initiated successfully!', 'log-success');
+                    log('✅ Backtest Execution Completed Successfully!', 'log-success');
                     log(`Message: ${data.message}`, 'log-success');
-                    log('Refresh the DB table to view new results after a few moments.', 'log-info');
+                    log('Pulling saved results from the Database...', 'log-info');
                     fetchBacktests();
                 } else {
                     setStatus('error');

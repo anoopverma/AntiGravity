@@ -422,9 +422,9 @@ def test_strategy():
     scripts = []
     if strategy == "ALL":
         scripts = ["backtest_dhan_5min.py", "backtest_gamma.py", "backtest_v4.py"]
-    elif strategy == "v4_trailing_sl":
+    elif strategy == "v4_gamma":
         scripts = ["backtest_v4.py"]
-    elif strategy == "gamma_spike":
+    elif strategy == "gamma_blast":
         scripts = ["backtest_gamma.py"]
     else:
         # DB strategies like V5_IV15_48W can be covered by the main dhan backtest 
@@ -440,13 +440,16 @@ def test_strategy():
     count = 0
     for script in scripts:
         if os.path.exists(script):
-            subprocess.Popen(["python", script], env=env)
-            count += 1
+            try:
+                subprocess.run(["python", script], env=env, check=True)
+                count += 1
+            except subprocess.CalledProcessError as e:
+                return jsonify({"status": "error", "message": f"Error running {script}: {e}"}), 500
 
     if count == 0:
         return jsonify({"status": "error", "message": f"No backtest scripts found for {strategy}"}), 404
 
-    return jsonify({"status": "success", "message": f"Started {count} background job(s) for testing strategy: {strategy}."})
+    return jsonify({"status": "success", "message": f"Completed {count} backtest(s) for strategy: {strategy}. Data saved to database."})
 
 
 if __name__ == '__main__':
