@@ -76,7 +76,7 @@ init_dhan_local()
 # ── Strategy ─────────────────────────────────────────────────────────────────
 strategy = None
 try:
-    from v4_trailing_sl_strategy import NiftyV4TrailingSLStrategy
+    from strategy.v4_trailing_sl_strategy import NiftyV4TrailingSLStrategy
     expiry_date = "2026-03-02"
     strategy = NiftyV4TrailingSLStrategy(expiry_date)
     if dhan:
@@ -136,6 +136,14 @@ def logout():
 @login_required
 def index():
     response = make_response(render_template('index.html'))
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    return response
+
+
+@app.route('/backtest')
+@login_required
+def backtest():
+    response = make_response(render_template('backtest_runner.html'))
     response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
     return response
 

@@ -458,8 +458,8 @@
                 <label>Strategy</label>
                 <select id="strategy-select" onchange="onStrategyChange()">
                     <option value="ALL">All Strategies</option>
-                    <option value="v4_trailing_sl">V4 Trailing Stop-Loss</option>
-                    <option value="gamma_spike">Gamma Spike</option>
+                    <option value="v4_trailing_sl">V4 Gamma</option>
+                    <option value="gamma_spike">Gamma Blast</option>
                 </select>
                 <div id="strategy-meta" style="margin-top:0.6rem"></div>
             </div>
@@ -482,7 +482,8 @@
                 <button class="btn-run" id="run-btn" onclick="runBacktest()">
                     ▶ MOCK RUN
                 </button>
-                <button class="btn-run" style="background: linear-gradient(135deg, #e3b341, #da3633);" id="test-strat-btn" onclick="testStrategy()">
+                <button class="btn-run" style="background: linear-gradient(135deg, #e3b341, #da3633);"
+                    id="test-strat-btn" onclick="testStrategy()">
                     🧪 TEST STRATEGY (DB BACKEND)
                 </button>
             </div>
@@ -498,7 +499,8 @@
                         <span id="status-text" style="font-size:0.78rem;color:var(--text-dim)">Idle</span>
                     </div>
                 </div>
-                <div class="log-box" id="log-box">Ready. Select a strategy and click Run Backtest or Test Strategy.</div>
+                <div class="log-box" id="log-box">Ready. Select a strategy and click Run Backtest or Test Strategy.
+                </div>
 
                 <div class="summary-grid" id="summary-grid" style="display:none">
                     <div class="stat-card">
@@ -569,12 +571,12 @@
                 desc: 'Runs all available strategies sequentially against the historical data.',
             },
             v4_trailing_sl: {
-                label: 'V4 Trailing SL',
+                label: 'V4 Gamma',
                 badge: 'badge-v4',
                 desc: 'Nifty options straddle with 50% initial SL and 15% trailing — Champion V4 Parameters.',
             },
             gamma_spike: {
-                label: 'Gamma Spike',
+                label: 'Gamma Blast',
                 badge: 'badge-gamma',
                 desc: 'Trades Nifty options on gamma acceleration events near expiry.',
             }
@@ -598,12 +600,12 @@
             try {
                 const res = await fetch('/api/backtests');
                 const data = await res.json();
-                
+
                 const select = document.getElementById('strategy-select');
                 const currentVal = select.value;
 
                 if (data.status === "success" && data.data.length > 0) {
-                    
+
                     // Add DB unique strategy names to the dropdown if they don't exist
                     const dbStrategies = [...new Set(data.data.map(r => r.Strategy_Name).filter(Boolean))];
                     dbStrategies.forEach(s => {
@@ -624,12 +626,12 @@
                     const selectedStrategy = currentVal;
                     let rows = data.data;
                     if (selectedStrategy !== 'ALL' && selectedStrategy !== 'v4_trailing_sl' && selectedStrategy !== 'gamma_spike' && selectedStrategy !== 'strangle_1yr') {
-                         rows = rows.filter(r => r.Strategy_Name === selectedStrategy);
+                        rows = rows.filter(r => r.Strategy_Name === selectedStrategy);
                     }
 
                     const tbody = document.getElementById('backtest-tbody');
                     tbody.innerHTML = '';
-                    
+
                     let totalPnL = 0;
                     let winningTrades = 0;
 
@@ -639,9 +641,9 @@
                         const roi = parseFloat(row['ROI%']) || 0;
                         const isWin = pnl > 0;
                         const fmt = (n) => n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                        
+
                         totalPnL += pnl;
-                        if(isWin) winningTrades++;
+                        if (isWin) winningTrades++;
 
                         tr.className = isWin ? 'win' : 'loss';
                         tr.innerHTML = `
@@ -665,12 +667,12 @@
                         `;
                         tbody.appendChild(tr);
                     });
-                    
+
                     const INITIAL_CAPITAL = 100000;
                     const totalTrades = rows.length;
                     const accuracy = totalTrades > 0 ? ((winningTrades / totalTrades) * 100).toFixed(2) : 0;
                     const totalROI = (totalPnL / INITIAL_CAPITAL) * 100;
-                    
+
                     document.getElementById('backtest-tfoot').innerHTML = `
                         <tr style="background-color: #161b22; font-weight: bold; border-top: 2px solid #30363d;">
                             <td colspan="12" style="text-align: left; color: #ffffff;">📊 Records: ${totalTrades} Trades | Accuracy: <span style="color:#60a5fa">${accuracy}%</span></td>
@@ -685,7 +687,7 @@
                         `<tr><td colspan="17" class="empty-state">No database records found. Run a backtest first.</td></tr>`;
                     document.getElementById('backtest-tfoot').innerHTML = '';
                 }
-                
+
                 onStrategyChange();
             } catch (err) {
                 console.error("Backtest fetch failed", err);
@@ -726,9 +728,9 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload),
                 });
-                
+
                 const data = await resp.json();
-                
+
                 if (resp.ok) {
                     setStatus('done');
                     log('✅ Backend test initiated successfully!', 'log-success');
@@ -743,7 +745,7 @@
                 setStatus('error');
                 log(`❌ Network Error: ${e.message}`, 'log-error');
             }
-            
+
             btn.disabled = false;
             btn.innerHTML = '🧪 TEST STRATEGY (DB BACKEND)';
         }
