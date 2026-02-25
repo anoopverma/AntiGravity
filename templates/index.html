@@ -301,7 +301,6 @@
             <button class="btn-pause" onclick="handleAction('pause')">⏸ Pause</button>
             <button class="btn-pause" onclick="handleAction('resume')">⏯ Resume</button>
             <button class="btn-exit" onclick="handleAction('stop')">🛑 STOP BOT</button>
-            <button class="btn-close-all" onclick="confirmCloseAll()">💀 Close All Positions</button>
         </div>
 
         <div class="card">
@@ -321,6 +320,11 @@
                                background: rgba(35,134,54,0.2); border:1px solid #238636;
                                color:#4ade80; border-radius:6px; cursor:pointer; transition:all 0.2s;">
                         ▶ Live Refresh
+                    </button>
+                    <button onclick="confirmCloseAll()" style="padding:0.35rem 0.9rem; font-size:0.78rem; font-weight:600;
+                               background: rgba(220,38,38,0.2); border:1px solid #dc2626;
+                               color:#f87171; border-radius:6px; cursor:pointer; transition:all 0.2s;">
+                        💀 Close All
                     </button>
                 </div>
             </div>
