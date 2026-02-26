@@ -4,7 +4,6 @@ import datetime
 import logging
 from dotenv import load_dotenv
 from dhanhq import dhanhq
-from strategy.whatsapp_alerter import WhatsAppAlerter
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -22,7 +21,6 @@ class NiftyGammaSpikeStrategy:
         self.paused = False
         self.in_position = False
         self.paper_trade = True # Overriden by the app.py engine starter
-        self.alerter = WhatsAppAlerter()
         
         # --- Gamma Spike Parameters ---
         self.initial_sl = 0.50        # Stop Loss at 50%
@@ -188,8 +186,6 @@ class NiftyGammaSpikeStrategy:
                             logger.info(f"Modified SL Order {order['id']} to ₹{new_sl_val}: {resp}")
                         except Exception as e:
                             logger.error(f"Failed to modify SL order {order['id']}: {e}")
-                            if not self.paper_trade:
-                                self.alerter.send_alert(f"Gamma SL Modify Failed for Order {order['id']}: {e}")
                             
             self.unrealized_pnl = (curr_price - entry) * self.lot_size
             
@@ -267,10 +263,8 @@ class NiftyGammaSpikeStrategy:
                     
             except Exception as e:
                 logger.error(f"LIVE Order Placement Failed: {e}")
-                self.alerter.send_alert(f"Gamma Live Order Placement FAILED: {e}")
         elif not self.paper_trade:
             logger.error("LIVE EXECUTION FAILED: Missing Security ID for the Option.")
-            self.alerter.send_alert("Gamma LIVE EXECUTION FAILED: Missing Security ID down the chain.")
 
     def get_net_qty_from_broker(self, security_id):
         """Safely verify our open quantity directly from Broker to avoid naked short selling."""
@@ -304,7 +298,6 @@ class NiftyGammaSpikeStrategy:
                         logger.info(f"Cancelled Pending SL Trigger: {order['id']}")
                     except Exception as e:
                         logger.error(f"Attempt cancelling old SL failed: {e}")
-                        self.alerter.send_alert(f"Gamma LIVE SL Cancel Failed for order {order['id']} on Exit: {e}")
                 self.live_sl_orders = []
                 import time; time.sleep(1.0) # wait briefly for Dhan engine to purge cancelled orders 
                 
@@ -334,7 +327,6 @@ class NiftyGammaSpikeStrategy:
                     
             except Exception as e:
                 logger.error(f"LIVE Order Exit Failed: {e}")
-                self.alerter.send_alert(f"Gamma LIVE ORDER EXIT SWEEP FAILED: {e}")
 
         # Save to PostgreSQL
         try:
