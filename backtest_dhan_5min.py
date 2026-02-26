@@ -10,6 +10,9 @@ from scipy.stats import norm
 import sqlalchemy
 from sqlalchemy import create_engine
 from collections import deque
+import warnings
+
+warnings.simplefilter(action='ignore', category=FutureWarning)
 
 # Configure logging
 logging.basicConfig(
@@ -198,7 +201,7 @@ class NiftyTuesdayDhanBacktester:
         rsi = 100 - (100 / (1 + rs))
         return rsi
 
-    def run_v4_backtest(self, n_weeks=12, vix_threshold=12.7, target_lock_in=0.30, trailing_step=0.15, initial_sl=0.50, expansion_threshold=1.15, trend_filter_pct=0.15, use_supertrend=False, use_rsi=False):
+    def run_v4_backtest(self, n_weeks=12, vix_threshold=12.0, target_lock_in=0.20, trailing_step=0.15, initial_sl=0.45, expansion_threshold=1.15, trend_filter_pct=0.15, use_supertrend=False, use_rsi=False):
         tuesdays = self.get_last_n_tuesdays(n_weeks)
         logger.info(f"Starting V4 Trailing SL Strategy Backtest (RSI: {use_rsi}) - Last {len(tuesdays)} Weeks")
         self.results = []
@@ -286,7 +289,7 @@ class NiftyTuesdayDhanBacktester:
                     # Priority 1: Hard Floor SL (₹6)
                     if curr_p <= 6.0:
                         exit_triggered = True
-                        exit_price = 6.0
+                        exit_price = curr_p
                         reason = "Hard Floor SL (₹6)"
                     # Priority 2: Super Trail
                     elif profit_pct >= 1.00: 
@@ -328,6 +331,7 @@ class NiftyTuesdayDhanBacktester:
                             'Entry_Time': entry_time.strftime("%H:%M:%S") if entry_time else "00:00:00",
                             'Exit_Time': index.strftime("%H:%M:%S"),
                             'Option_Type': position['type'],
+                            'Strike': f"{int(position['strike'])}-{date_str}-{position['type']}E",
                             'Action': 'BUY',
                             'Qty': position['qty'],
                             'Buy_Price': buy_price_rounded,
@@ -420,8 +424,8 @@ class NiftyTuesdayDhanBacktester:
 
                     if curr_p <= 6.0:
                         exit_triggered = True
-                        exit_price = 6.0
-                        reason     = "Hard Floor SL (₹6)"
+                        exit_price     = curr_p
+                        reason         = "Hard Floor SL (₹6)"
                     elif profit_pct >= 1.00:
                         sl_val = peak * 0.90
                         if curr_p <= sl_val:
@@ -458,6 +462,7 @@ class NiftyTuesdayDhanBacktester:
                             'Entry_Time':   entry_time.strftime("%H:%M:%S") if entry_time else "00:00:00",
                             'Exit_Time':    index.strftime("%H:%M:%S"),
                             'Option_Type':  position['type'],
+                            'Strike':       f"{int(position['strike'])}-{date_str}-{position['type']}E",
                             'Action':       'BUY',
                             'Qty':          position['qty'],
                             'Buy_Price':    buy_p,
@@ -523,9 +528,9 @@ class NiftyTuesdayDhanBacktester:
         print(f"  Max Win      : ₹{df['PNL'].max():,.2f}")
         print(f"  Max Loss     : ₹{df['PNL'].min():,.2f}")
         print(f"{'='*55}\n")
-        print(df[['Date','Entry_Time','Exit_Time','Option_Type','Qty',
+        print(df[['Date','Entry_Time','Exit_Time','Option_Type','Strike','Qty',
                    'Buy_Price','Peak_Price','Sell_Price','PNL','ROI%',
-                   'Capital_ROI%','Reason','Win']].to_string(index=False))
+                   'Capital_ROI%','Reason']].to_string(index=False))
 
     def run_v5_backtest(self, n_weeks=48):
         """
@@ -610,7 +615,7 @@ class NiftyTuesdayDhanBacktester:
                     tighten = secs_to_close <= 20 * 60
 
                     if curr_p <= 6.0:
-                        exit_price = 6.0
+                        exit_price = curr_p
                         reason     = "Hard Floor SL (₹6)"
                     elif profit_pct >= 1.00:
                         trail = 0.08 if tighten else 0.10
@@ -663,6 +668,7 @@ class NiftyTuesdayDhanBacktester:
                         'Entry_Time':  entry_time.strftime("%H:%M:%S") if entry_time else "00:00:00",
                         'Exit_Time':   index.strftime("%H:%M:%S"),
                         'Option_Type': position['type'],
+                        'Strike':      f"{int(position['strike'])}-{date_str}-{position['type']}E",
                         'Action':      'BUY',
                         'Qty':         position['qty'],
                         'Buy_Price':   buy_p,
@@ -761,8 +767,8 @@ class NiftyTuesdayDhanBacktester:
         print(f"  Max Single P : ₹{df['PNL'].max():,.2f}")
         print(f"  Max Single L : ₹{df['PNL'].min():,.2f}")
         print(f"{'='*55}\n")
-        print(df[['Date','Entry_Time','Exit_Time','Option_Type','Qty',
-                   'Buy_Price','Peak_Price','Sell_Price','PNL','ROI%','Reason','Win']].to_string(index=False))
+        print(df[['Date','Entry_Time','Exit_Time','Option_Type','Strike','Qty',
+                   'Buy_Price','Peak_Price','Sell_Price','PNL','ROI%','Reason']].to_string(index=False))
 
     def print_summary_v4(self):
         if not self.results:
@@ -805,7 +811,7 @@ if __name__ == "__main__":
     
     if strat in ["v4_gamma", "ALL"]:
         print("\n--- Running V4 Backtest (Entry+5% BE) ---")
-        backtester.run_v4_backtest(n_weeks=48, use_rsi=False, expansion_threshold=1.15)
+        backtester.run_v4_backtest(n_weeks=48, use_rsi=False, expansion_threshold=1.15, initial_sl=0.45, target_lock_in=0.20, vix_threshold=12.0)
         
     if strat in ["gamma_blast", "ALL"]:
         print("\n--- Running Gamma Spike Backtest (Entry+5% BE) ---")

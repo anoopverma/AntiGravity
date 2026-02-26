@@ -25,11 +25,11 @@ class NiftyV4TrailingSLStrategy:
         self.in_position = False
         self.paper_trade = True # Overriden by the app.py engine starter
         
-        # --- Champion V4 Parameters (+103% Backtest ROI) ---
-        self.initial_sl = 0.50        # Stop Loss at 50%
+        # --- Champion V4 Parameters (+160% Backtest ROI) ---
+        self.initial_sl = 0.45        # Stop Loss at 45%
         self.trailing_step = 0.15     # Trail by 15% once profitable
-        self.target_lock_in = 0.30    # Start trailing after 30% profit
-        self.vix_threshold = 12.5   # VIX must be > 12.5
+        self.target_lock_in = 0.20    # Start trailing after 20% profit
+        self.vix_threshold = 12.0     # VIX must be >= 12.0
         self.expansion_threshold = 1.15 # IV Expansion 15%
         self.trend_filter_pct = 0.15  # Trend shift 0.15%
         self.momentum_threshold = 0.001 # 0.10% momentum check
@@ -44,6 +44,7 @@ class NiftyV4TrailingSLStrategy:
     def get_live_data(self):
         """Fetches spot, atm prices, and VIX from Dhan."""
         spot, ce_p, pe_p, ce_vol, pe_vol, current_vix = 0, 0, 0, 0, 0, 13.0
+        ce_id, pe_id = None, None
         today = datetime.datetime.now().strftime("%Y-%m-%d")
 
         try:
@@ -66,15 +67,17 @@ class NiftyV4TrailingSLStrategy:
                     pe_p = strike_data["pe"].get("last_price", 0)
                     ce_vol = strike_data["ce"].get("volume", 1)
                     pe_vol = strike_data["pe"].get("volume", 1)
+                    ce_id = strike_data["ce"].get("security_id")
+                    pe_id = strike_data["pe"].get("security_id")
         except Exception as e:
             logger.error(f"Error fetching live data: {e}")
             
-        return spot, ce_p, pe_p, ce_vol, pe_vol, current_vix
+        return spot, ce_p, pe_p, ce_vol, pe_vol, current_vix, ce_id, pe_id
 
     def capture_benchmark(self):
         """Sets the 1:45 PM baseline for spot and straddle price."""
         try:
-            spot, ce_p, pe_p, _, _, _ = self.get_live_data()
+            spot, ce_p, pe_p, _, _, _, _, _ = self.get_live_data()
             if spot > 0:
                 self.benchmark_spot = spot
                 self.benchmark_straddle = ce_p + pe_p
@@ -89,6 +92,7 @@ class NiftyV4TrailingSLStrategy:
         # Trading Window Check (14:00 - 15:00 for entry)
         is_entry_window = (now.hour == 14) or (now.hour == 15 and now.minute <= 7)
         is_exit_time = now.hour == 15 and now.minute >= 25
+        is_hard_sweep_time = now.hour == 15 and now.minute >= 26
         
         # Capture benchmark at 13:45
         if now.hour == 13 and now.minute == 45 and self.benchmark_straddle is None:
@@ -99,14 +103,18 @@ class NiftyV4TrailingSLStrategy:
             self.capture_benchmark()
 
         if self.in_position:
-            self.manage_position(is_exit_time)
-        elif is_entry_window and self.benchmark_straddle:
+            if is_hard_sweep_time:
+                logger.warning("🕒 3:26 PM HARD SWEEP TRIGGERED. Forcing immediate position cleanup.")
+                self.close_position(0, "End of Day Hard Sweep")
+            else:
+                self.manage_position(is_exit_time)
+        elif not is_hard_sweep_time and is_entry_window and self.benchmark_straddle:
             self.check_entry()
 
     def check_entry(self):
         """Matches the 'Champion' backtest entry logic."""
         try:
-            spot, ce_p, pe_p, ce_vol, pe_vol, vix = self.get_live_data()
+            spot, ce_p, pe_p, ce_vol, pe_vol, vix, ce_id, pe_id = self.get_live_data()
             if spot == 0 or self.benchmark_spot == 0: return
 
             current_straddle = ce_p + pe_p
@@ -124,12 +132,15 @@ class NiftyV4TrailingSLStrategy:
                 if spot > self.benchmark_spot:
                     opt_type = 'CE'
                     price = ce_p
+                    security_id = ce_id
                 else:
                     opt_type = 'PE'
                     price = pe_p
+                    security_id = pe_id
                 
+                atm_strike = int(round(spot / 50) * 50)
                 logger.info(f"🚀 V4 IV TRIGGERED | Type: {opt_type} | P: {price} | IV Change: +{round((current_straddle/self.benchmark_straddle - 1)*100, 2)}%")
-                self.place_order(opt_type, price)
+                self.place_order(opt_type, price, atm_strike, security_id)
                 
         except Exception as e:
             logger.error(f"Entry check failed: {e}")
@@ -137,51 +148,144 @@ class NiftyV4TrailingSLStrategy:
     def manage_position(self, force_exit=False):
         """Matches the 'Champion' backtest trailing logic."""
         try:
-            spot, ce_p, pe_p, _, _, _ = self.get_live_data()
+            spot, ce_p, pe_p, _, _, _, _, _ = self.get_live_data()
             curr_price = ce_p if self.current_position['type'] == 'CE' else pe_p
             
+            entry = self.current_position['entry']
             if curr_price > self.current_position['peak']:
                 self.current_position['peak'] = curr_price
+            peak = self.current_position['peak']
+            profit_pct = (peak - entry) / entry
             
-            # Tiered Trailing SL
-            profit_pct = (self.current_position['peak'] - self.current_position['entry']) / self.current_position['entry']
+            # Mathematical Target SL calculation (same logic as V4)
+            new_sl_val = entry * (1.0 - self.initial_sl)
+            if profit_pct >= 1.00:
+                new_sl_val = peak * 0.90
+            elif profit_pct >= self.target_lock_in:
+                trailing_steps = int((profit_pct - self.target_lock_in) / self.trailing_step)
+                base_lock = entry * 1.05 
+                new_sl_val = base_lock + (entry * self.trailing_step * trailing_steps)
+                
+            new_sl_val = round(max(6.0, new_sl_val), 1)
             
-            if curr_price <= self.absolute_sl:
-                sl_price = 99999.0 # Force immediate exit
-                reason = "Hard Floor SL (₹6)"
-            elif profit_pct >= 1.0: # Super Winner (Trail 10%)
-                sl_price = self.current_position['peak'] * 0.90
-                reason = "Super Trail"
-            elif profit_pct >= 0.20: # Break-even + 10%
-                sl_price = self.current_position['entry'] * 1.10
-                reason = "Break-Even+10%"
-            else: # Initial SL (50%)
-                sl_price = self.current_position['entry'] * (1 - self.initial_sl)
-                reason = "Initial SL"
+            exit_triggered = False
+            exit_price = curr_price
+            reason = "hold"
             
-            self.unrealized_pnl = (curr_price - self.current_position['entry']) * self.lot_size
+            current_sl_val = self.current_position.get('current_sl_val', 0)
             
-            if curr_price <= sl_price or force_exit:
-                exit_reason = "Time Exit" if force_exit else reason
-                self.close_position(curr_price, exit_reason)
+            # Trail Upwards only
+            if new_sl_val > current_sl_val:
+                self.current_position['current_sl_val'] = new_sl_val
+                logger.info(f"TRAILING SL ADVANCED TO: ₹{new_sl_val}")
+                
+                if not self.paper_trade:
+                    for order in getattr(self, 'live_sl_orders', []):
+                        try:
+                            resp = self.dhan.modify_order(
+                                order_id=order['id'],
+                                order_type=self.dhan.STOP_LOSS_MARKET,
+                                leg_name='NA',
+                                quantity=order['qty'],
+                                price=0,
+                                trigger_price=new_sl_val,
+                                disclosed_quantity=0,
+                                validity=self.dhan.DAY
+                            )
+                            logger.info(f"Modified SL Order {order['id']} to ₹{new_sl_val}: {resp}")
+                        except Exception as e:
+                            logger.error(f"Failed to modify SL order {order['id']}: {e}")
+                            
+            self.unrealized_pnl = (curr_price - entry) * self.lot_size
+            
+            # 5. Time Exit or Local Fallback SL hit
+            if force_exit:
+                exit_triggered = True
+                exit_price = curr_price
+                reason = "Time Exit"
+            elif curr_price <= self.current_position.get('current_sl_val', 0):
+                exit_triggered = True
+                reason = f"SL Hit Locally (₹{self.current_position.get('current_sl_val', 0)})"
+                
+            if exit_triggered:
+                self.close_position(exit_price, reason)
                 
         except Exception as e:
             logger.error(f"Position management failed: {e}")
 
-    def place_order(self, opt_type, price):
+    def place_order(self, opt_type, price, strike, security_id):
         """Simulates or places a real order."""
+        initial_sl_val = round(max(6.0, price * (1.0 - self.initial_sl)), 1)
+        
         self.current_position = {
             'type': opt_type,
             'entry': price,
             'peak': price,
+            'strike': strike,
+            'security_id': security_id,
+            'current_sl_val': initial_sl_val,
             'time': datetime.datetime.now()
         }
         self.in_position = True
-        logger.info(f"✅ Order Placed: {opt_type} at {price} (Paper: {self.paper_trade})")
-        if not self.paper_trade:
-            # Real Dhan order placement would go here
-            logger.warning("LIVE ORDER PLACEMENT NOT YET IMPLEMENTED FOR DHAN API IN STRATEGY")
-            pass
+        self.live_sl_orders = [] # list of dicts: {'id': '123', 'qty': 100}
+        
+        logger.info(f"✅ Order Placed: {opt_type} at {price} (Strike: {strike}) (Paper: {self.paper_trade})")
+        if not self.paper_trade and security_id:
+            try:
+                max_qty_per_order = 1690 # 26 limit * 65 Nifty lot
+                # 1. Place Market BUY Leg
+                logger.info(f"LIVE EXECUTION: Placing {opt_type} BUY orders for total qty: {self.lot_size}")
+                remaining_qty = self.lot_size
+                while remaining_qty > 0:
+                    order_qty = min(remaining_qty, max_qty_per_order)
+                    bulk_order = self.dhan.place_order(
+                        security_id=str(security_id),
+                        exchange_segment=self.dhan.FNO,
+                        transaction_type=self.dhan.BUY,
+                        quantity=order_qty,
+                        order_type=self.dhan.MARKET,
+                        product_type=self.dhan.MARGIN, # Delivery/CarryForward for FNO
+                        price=0
+                    )
+                    logger.info(f"-> Live BUY Order Chunk ({order_qty}): {bulk_order}")
+                    remaining_qty -= order_qty
+                    
+                # 2. Add Stop Loss Market Orders for the full quantity matching entry chunks
+                logger.info(f"LIVE EXECUTION: Immediatly firing SL-M SELL Orders at ₹{initial_sl_val}")
+                remaining_sl_qty = self.lot_size
+                while remaining_sl_qty > 0:
+                    order_qty = min(remaining_sl_qty, max_qty_per_order)
+                    sl_resp = self.dhan.place_order(
+                        security_id=str(security_id),
+                        exchange_segment=self.dhan.FNO,
+                        transaction_type=self.dhan.SELL,
+                        quantity=order_qty,
+                        order_type=self.dhan.STOP_LOSS_MARKET,
+                        product_type=self.dhan.MARGIN, # Delivery/CarryForward for FNO
+                        price=0,
+                        trigger_price=initial_sl_val
+                    )
+                    logger.info(f"-> Live SL-M Order Chunk ({order_qty}): {sl_resp}")
+                    if sl_resp and sl_resp.get('status') == 'success' and 'orderId' in sl_resp.get('data', {}):
+                        self.live_sl_orders.append({'id': sl_resp['data']['orderId'], 'qty': order_qty})
+                    remaining_sl_qty -= order_qty
+                    
+            except Exception as e:
+                logger.error(f"LIVE Order Placement Failed: {e}")
+        elif not self.paper_trade:
+            logger.error("LIVE EXECUTION FAILED: Missing Security ID for the Option.")
+
+    def get_net_qty_from_broker(self, security_id):
+        """Safely verify our open quantity directly from Broker to avoid naked short selling."""
+        try:
+            positions = self.dhan.get_positions()
+            if positions and positions.get("status") == "success":
+                for p in positions.get("data", []):
+                    if str(p.get("securityId")) == str(security_id):
+                        return int(p.get("netQty", 0))
+        except Exception as e:
+            logger.error(f"Error checking position book: {e}")
+        return 0
 
     def close_position(self, price, reason):
         """Simulates or closes a real position."""
@@ -192,9 +296,46 @@ class NiftyV4TrailingSLStrategy:
         old_position = self.current_position
         self.current_position = None
         self.unrealized_pnl = 0
-        if not self.paper_trade:
-            # Real Dhan order closure would go here
-            pass
+        if not self.paper_trade and old_position.get('security_id'):
+            try:
+                security_id = old_position['security_id']
+                
+                # 1. CRITICAL: Cancel trailing SL orders cleanly so they don't fire twice!
+                for order in getattr(self, 'live_sl_orders', []):
+                    try:
+                        self.dhan.cancel_order(order_id=order['id'])
+                        logger.info(f"Cancelled Pending SL Trigger: {order['id']}")
+                    except Exception as e:
+                        logger.error(f"Attempt cancelling old SL failed: {e}")
+                self.live_sl_orders = []
+                import time; time.sleep(1.0) # wait briefly for Dhan engine to purge cancelled orders 
+                
+                max_qty_per_order = 1690 # 26 lot limit
+                
+                # 2. VERIFY how many shares we STILL actually own (maybe SL fired right as clock ran out)
+                true_net_qty = self.get_net_qty_from_broker(security_id)
+                
+                if true_net_qty > 0:
+                    remaining_qty = true_net_qty
+                    logger.info(f"LIVE EXIT: Firing remaining {true_net_qty} MARKET SELL orders for {old_position['type']}")
+                    while remaining_qty > 0:
+                        order_qty = min(remaining_qty, max_qty_per_order)
+                        order = self.dhan.place_order(
+                            security_id=str(security_id),
+                            exchange_segment=self.dhan.FNO,
+                            transaction_type=self.dhan.SELL,
+                            quantity=order_qty,
+                            order_type=self.dhan.MARKET,
+                            product_type=self.dhan.MARGIN, # Delivery/CarryForward for FNO
+                            price=0
+                        )
+                        logger.info(f"-> Live SELL Exit Chunk ({order_qty}): {order}")
+                        remaining_qty -= order_qty
+                else:
+                    logger.info("LIVE EXIT OVERRIDE: 0 Net Qty found on broker book. Stop loss likely consumed by Dhan internally. Clean skip!")
+                    
+            except Exception as e:
+                logger.error(f"LIVE Order Exit Failed: {e}")
 
         # Save to PostgreSQL
         try:
@@ -210,7 +351,8 @@ class NiftyV4TrailingSLStrategy:
                     'Date': datetime.datetime.now().strftime("%Y-%m-%d"),
                     'Entry_Time': old_position['time'].strftime("%H:%M:%S"),
                     'Exit_Time': datetime.datetime.now().strftime("%H:%M:%S"),
-                    'Option_Type': old_position['type'],
+                    'Strike': f"{old_position.get('strike', '0')}-{self.target_expiry}-{old_position['type']}",
+                    'Option_Type': 'C' if old_position['type'] == 'CE' else 'P',
                     'Action': 'BUY',
                     'Qty': self.lot_size,
                     'Buy_Price': round(old_position['entry'], 2),

@@ -581,7 +581,11 @@
         <div class="card">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
                 <div class="card-title" style="margin-bottom: 0;">Historical Backtests Database (PostgreSQL)</div>
-                <button class="btn-sm" onclick="fetchBacktests()">🔄 Refresh Records</button>
+                <div>
+                    <button class="btn-sm" onclick="exportToCSV()"
+                        style="margin-right: 0.5rem; background-color: #238636; color: white;">📊 Export CSV</button>
+                    <button class="btn-sm" onclick="fetchBacktests()">🔄 Refresh Records</button>
+                </div>
             </div>
             <div class="table-container">
                 <table id="backtest-table">
@@ -592,6 +596,7 @@
                             <th>Run Mode</th>
                             <th>Strategy</th>
                             <th>Trade Date</th>
+                            <th>Strike</th>
                             <th>Type</th>
                             <th>Action</th>
                             <th>Qty</th>
@@ -604,12 +609,11 @@
                             <th>ROI%</th>
                             <th>Cap ROI%</th>
                             <th>Reason</th>
-                            <th>Result</th>
                         </tr>
                     </thead>
                     <tbody id="backtest-tbody">
                         <tr>
-                            <td colspan="17" class="empty-state">Loading database records...</td>
+                            <td colspan="18" class="empty-state">Loading database records...</td>
                         </tr>
                     </tbody>
                     <tfoot id="backtest-tfoot"></tfoot>
@@ -742,7 +746,7 @@
                 } else {
                     _allData = [];
                     document.getElementById('backtest-tbody').innerHTML =
-                        `<tr><td colspan="17" class="empty-state">No database records found. Run a backtest first.</td></tr>`;
+                        `<tr><td colspan="18" class="empty-state">No database records found. Run a backtest first.</td></tr>`;
                     document.getElementById('backtest-tfoot').innerHTML = '';
                     document.getElementById('equity-card').style.display = 'none';
                 }
@@ -777,7 +781,7 @@
             }
 
             if (rows.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="17" class="empty-state">No records for this selection.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="18" class="empty-state">No records for this selection.</td></tr>`;
                 document.getElementById('backtest-tfoot').innerHTML = '';
                 document.getElementById('equity-card').style.display = 'none';
                 return;
@@ -803,6 +807,7 @@
                     <td><span style="border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 2px 4px; font-size: 0.70rem;">${row.Run_Mode || 'Backtest'}</span></td>
                     <td>${row.Strategy_Name || '-'}</td>
                     <td>${row.Date || '-'}</td>
+                    <td><span style="font-family: monospace; font-size: 0.85em; background: rgba(255,255,255,0.05); padding: 2px 4px; border-radius: 4px;">${row.Strike || '-'}</span></td>
                     <td>${row.Option_Type || '-'}</td>
                     <td>${row.Action || '-'}</td>
                     <td>${row.Qty || '-'}</td>
@@ -815,7 +820,6 @@
                     <td>${roi.toFixed(2)}%</td>
                     <td style="font-weight:600;">${(parseFloat(row['Capital_ROI%']) || 0).toFixed(2)}%</td>
                     <td>${row.Reason || '-'}</td>
-                    <td><b>${isWin ? 'WIN' : 'LOSS'}</b></td>
                 `;
                 tbody.appendChild(tr);
             });
@@ -827,7 +831,7 @@
 
             document.getElementById('backtest-tfoot').innerHTML = `
                 <tr style="background-color: #161b22; font-weight: bold; border-top: 2px solid #30363d;">
-                    <td colspan="12" style="text-align: left; color: #ffffff;">📊 Records: ${totalTrades} Trades | Accuracy: <span style="color:#60a5fa">${accuracy}%</span></td>
+                    <td colspan="13" style="text-align: left; color: #ffffff;">📊 Records: ${totalTrades} Trades | Accuracy: <span style="color:#60a5fa">${accuracy}%</span></td>
                     <td class="${totalPnL > 0 ? 'win' : 'loss'}">₹${totalPnL.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                     <td class="${totalROI > 0 ? 'win' : 'loss'}">${totalROI.toFixed(2)}%</td>
                     <td colspan="3"></td>
@@ -1046,8 +1050,67 @@
             });
         }
 
+        function exportToCSV() {
+            if (typeof _allData === 'undefined' || !_allData || _allData.length === 0) {
+                alert("No data available to export.");
+                return;
+            }
+
+            // Apply current UI table filters exactly as renderTable does
+            const selectedRunMode = document.getElementById('run-mode-select').value;
+            const selectedRunDate = document.getElementById('run-date-select').value;
+
+            let filteredData = _allData.slice();
+            if (selectedRunMode !== 'ALL') {
+                filteredData = filteredData.filter(r => r.Run_Mode === selectedRunMode);
+            }
+            if (selectedRunDate !== 'ALL') {
+                filteredData = filteredData.filter(r => r.Run_Date === selectedRunDate);
+            }
+
+            if (filteredData.length === 0) {
+                alert("No data found for the current filters.");
+                return;
+            }
+
+            // Define columns
+            const cols = [
+                'Run_Date', 'Run_Mode', 'Strategy_Name', 'Date', 'Strike', 'Option_Type',
+                'Action', 'Qty', 'Entry_Time', 'Exit_Time', 'Buy_Price', 'Peak_Price',
+                'Sell_Price', 'PNL', 'ROI%', 'Capital_ROI%', 'Reason'
+            ];
+
+            let csvContent = "";
+            csvContent += cols.join(",") + "\n";
+
+            filteredData.forEach(row => {
+                const vals = cols.map(col => {
+                    let val = row[col];
+                    if (val === null || val === undefined) val = "";
+                    if (typeof val === 'string' && val.includes(',')) {
+                        return `"${val}"`;
+                    }
+                    return val;
+                });
+                csvContent += vals.join(",") + "\n";
+            });
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.setAttribute("href", url);
+            link.setAttribute("download", `backtest_export_${new Date().toISOString().slice(0, 10)}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+
         // Auto-load latest run data on page load
         fetchBacktests();
+
+        // Set end-date to current date
+        document.getElementById('end-date').value = new Date().toISOString().slice(0, 10);
     </script>
 </body>
 
