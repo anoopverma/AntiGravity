@@ -952,7 +952,11 @@
             const equityData = [INITIAL_CAPITAL];
             let equity = INITIAL_CAPITAL;
 
-            rows.forEach(r => {
+            // Important: rows are currently sorted DESC (newest first) from the API.
+            // For the equity curve, we MUST process them ASC (oldest first).
+            const sortedRows = [...rows].reverse();
+
+            sortedRows.forEach(r => {
                 equity += parseFloat(r.PNL || 0);
                 labels.push(r.Date ? r.Date.substring(5) : '?'); // MM-DD
                 equityData.push(Math.round(equity));
