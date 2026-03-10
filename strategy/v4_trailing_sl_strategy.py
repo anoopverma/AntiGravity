@@ -23,7 +23,12 @@ class NiftyV4TrailingSLStrategy:
         self.running = False
         self.paused = False
         self.in_position = False
-        self.paper_trade = True # Overriden by the app.py engine starter
+        self.paper_trade = True 
+        
+        # Override fields
+        self.index_id = "13"          # Default Nifty 50
+        self.manual_base_time = None  # e.g. "13:45"
+        self.force_run = False
         
         # --- Champion V4 Parameters (+160% Backtest ROI) ---
         self.initial_sl = 0.45        # Stop Loss at 45%
@@ -55,7 +60,7 @@ class NiftyV4TrailingSLStrategy:
                 current_vix = float(vix_data.get("close", [13.0])[-1])
 
             # 2. Fetch Option Chain for Spot and ATM
-            oc_resp = self.dhan.option_chain(13, self.dhan.INDEX, self.target_expiry)
+            oc_resp = self.dhan.option_chain(int(self.index_id), self.dhan.INDEX, self.target_expiry)
             if oc_resp.get("status") == "success":
                 data = oc_resp["data"]
                 spot = data.get("last_price", 0)
@@ -81,7 +86,9 @@ class NiftyV4TrailingSLStrategy:
             if spot > 0:
                 self.benchmark_spot = spot
                 self.benchmark_straddle = ce_p + pe_p
-                logger.info(f"📍 Benchmark Set | Spot: {spot} | Straddle: {round(self.benchmark_straddle, 2)}")
+                logger.info(f"📍 Benchmark Set (V4) | Spot: {spot} | Straddle: {round(self.benchmark_straddle, 2)}")
+            else:
+                logger.warning(f"Benchmark Set (V4) Failed: Could not fetch spot > 0 for expiry {self.target_expiry}. (Ensure valid expiry date and market hours)")
         except Exception as e:
             logger.error(f"Failed to capture benchmark: {e}")
 
@@ -94,12 +101,25 @@ class NiftyV4TrailingSLStrategy:
         is_exit_time = now.hour == 15 and now.minute >= 25
         is_hard_sweep_time = now.hour == 15 and now.minute >= 26
         
-        # Capture benchmark at 13:45
-        if now.hour == 13 and now.minute == 45 and self.benchmark_straddle is None:
+        # Expiry Day Check: only trade if today is expiry (or forced)
+        today_str = now.strftime("%Y-%m-%d")
+        if not self.force_run and today_str != self.target_expiry:
+            # We still allow position management if we're in one (e.g. overnight carry, though V4 is intraday)
+            if not self.in_position:
+                return
+        
+        # Capture benchmark logic
+        base_h, base_m = 13, 45
+        if self.manual_base_time:
+            try:
+                base_h, base_m = map(int, self.manual_base_time.split(':'))
+            except: pass
+            
+        if now.hour == base_h and now.minute == base_m and self.benchmark_straddle is None:
             self.capture_benchmark()
             
-        # Paper Trade Helper: Auto-set benchmark if we started late
-        if self.paper_trade and self.benchmark_straddle is None and (now.hour > 13 or (now.hour == 13 and now.minute > 45)):
+        # Auto-set benchmark if we started late
+        if self.benchmark_straddle is None and (now.hour > base_h or (now.hour == base_h and now.minute > base_m)):
             self.capture_benchmark()
 
         if self.in_position:
@@ -115,7 +135,9 @@ class NiftyV4TrailingSLStrategy:
         """Matches the 'Champion' backtest entry logic."""
         try:
             spot, ce_p, pe_p, ce_vol, pe_vol, vix, ce_id, pe_id = self.get_live_data()
-            if spot == 0 or self.benchmark_spot == 0: return
+            if spot == 0 or self.benchmark_spot == 0: 
+                logger.warning(f"Entry Check (V4) skipped: Spot is 0. Cannot calculate straddle.")
+                return
 
             current_straddle = ce_p + pe_p
             
@@ -126,6 +148,10 @@ class NiftyV4TrailingSLStrategy:
             # 2. Momentum check (0.10% of spot price)
             # This ensures we aren't buying into a dead/flat candle
             momentum_hit = abs(ce_p - pe_p) > 0 # Simple live presence check
+            
+            iv_diff = round((current_straddle/self.benchmark_straddle - 1)*100, 2)
+            logger.info(f"Entry Check (V4) | Spot: {spot} | VIX: {vix} | Benchmark Straddle: {self.benchmark_straddle:.1f} | Curr Straddle: {current_straddle:.1f} | IV Chg: {iv_diff}%")
+            
             
             if iv_expansion_hit and vix >= self.vix_threshold and momentum_hit:
                 # Directional selection based on trend from benchmark

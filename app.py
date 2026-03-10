@@ -13,7 +13,14 @@ from flask import (
 )
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler("server_log.txt"),
+        logging.StreamHandler()
+    ]
+)
 logger = logging.getLogger(__name__)
 
 load_dotenv()
@@ -67,7 +74,7 @@ running_flag = False
 paused_flag = False
 current_broker = "Dhan"
 strategy_thread = None
-expiry_date = "2026-03-02"
+expiry_date = "2026-03-10"
 
 logger.info("Engine configured. Standing by for start.")
 
@@ -164,9 +171,101 @@ def backtest():
 
 
 
-@app.route('/health', methods=['GET'])
-def health():
-    return jsonify({"status": "ok"}), 200
+@app.route('/api/system_logs', methods=['GET'])
+@login_required
+def get_system_logs():
+    try:
+        with open('server_log.txt', 'r') as f:
+            lines = f.readlines()
+            
+        # Filter out werkzeug HTTP request logs
+        filtered_lines = [line for line in lines if '"GET /' not in line and '"POST /' not in line]
+        return jsonify({"status": "success", "logs": filtered_lines[-100:]})
+    except Exception as e:
+        return jsonify({"status": "error", "message": "No logs found"})
+
+@app.route('/api/expiries', methods=['GET'])
+@login_required
+def get_expiries():
+    from strategy.expiry_manager import ExpiryManager
+    from strategy.expiry_repository import PostgresExpiryRepository
+    try:
+        records = ExpiryManager(dhan_client=dhan).get_upcoming_expiries()
+        data    = [r.to_dict() for r in records]
+
+        # Persist to DB if Postgres is configured
+        uri = os.getenv("POSTGRES_URI", "")
+        if uri:
+            try:
+                repo = PostgresExpiryRepository(create_engine(uri))
+                db_records = [
+                    {"script_name": r.script, "expiry_date": r.expiry_date,
+                     "day_label": r.day_label, "source": r.source}
+                    for r in records
+                ]
+                repo.upsert(db_records)
+            except Exception as db_err:
+                logger.warning(f"Expiry DB save failed (non-fatal): {db_err}")
+
+        return jsonify({"status": "success", "data": data})
+    except Exception as e:
+        logger.error(f"Failed to calculate expiries: {e}")
+        return jsonify({"status": "error", "message": str(e)})
+
+
+@app.route('/api/expiries/history', methods=['GET'])
+@login_required
+def get_expiries_history():
+    """Read last-saved expiry records from the database."""
+    from strategy.expiry_repository import PostgresExpiryRepository
+    uri = os.getenv("POSTGRES_URI", "")
+    if not uri:
+        return jsonify({"status": "error", "message": "POSTGRES_URI not configured"}), 503
+    try:
+        repo = PostgresExpiryRepository(create_engine(uri))
+        return jsonify({"status": "success", "data": repo.fetch_latest()})
+    except Exception as e:
+        logger.error(f"Failed to read expiry history: {e}")
+        return jsonify({"status": "error", "message": str(e)})
+
+
+@app.route('/api/expiries/all', methods=['GET'])
+@login_required
+def get_expiries_all():
+    """Read all upcoming expiry records from the database for the next few months."""
+    uri = os.getenv("POSTGRES_URI", "")
+    if not uri:
+        return jsonify({"status": "error", "message": "POSTGRES_URI not configured"}), 503
+    try:
+        from sqlalchemy import text
+        engine = create_engine(uri)
+        with engine.connect() as conn:
+            # Fetch all expiries from today onwards
+            query = 'SELECT * FROM script_expiries WHERE expiry_date >= CURRENT_DATE ORDER BY expiry_date ASC, script_name ASC'
+            rows = conn.execute(text(query)).mappings().all()
+            
+            data = [
+                {
+                    "script": row["script_name"],
+                    "expiry": row["expiry_date"].strftime("%d %b %Y"),
+                    "expiry_iso": row["expiry_date"].isoformat(),
+                    "day_label": row["day_label"],
+                    "source": row["source"]
+                }
+                for row in rows
+            ]
+        return jsonify({"status": "success", "data": data})
+    except Exception as e:
+        logger.error(f"Failed to read expiry list: {e}")
+        return jsonify({"status": "error", "message": str(e)})
+
+@app.route('/expiries')
+@login_required
+def expiries_page():
+    response = make_response(render_template('expiry.html'))
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    return response
+
 
 
 @app.route('/api/status', methods=['GET'])
@@ -201,6 +300,9 @@ def start():
     data = request.get_json(silent=True) or {}
     live_strategies = data.get('live', [])
     paper_strategies = data.get('paper', [])
+    # Ensure overrides is a dict or None
+    raw_overrides = data.get('overrides')
+    overrides = raw_overrides if isinstance(raw_overrides, dict) else None
     
     if not dhan:
         return jsonify({"status": "error", "message": "Dhan not initialised"}), 503
@@ -218,11 +320,25 @@ def start():
             if strat_id == "v4_gamma":
                 try:
                     from strategy.v4_trailing_sl_strategy import NiftyV4TrailingSLStrategy
-                    s1 = NiftyV4TrailingSLStrategy(expiry_date)
+                    active_expiry = expiry_date
+                    if overrides and overrides.get('expiry'):
+                        active_expiry = overrides.get('expiry')
+                        
+                    s1 = NiftyV4TrailingSLStrategy(active_expiry)
                     s1.dhan = dhan
                     s1.paper_trade = is_paper
+                    
+                    if overrides:
+                        if overrides.get('qty'): 
+                            try: s1.lot_size = int(overrides.get('qty'))
+                            except: pass
+                        if overrides.get('index_id'): s1.index_id = str(overrides.get('index_id'))
+                        if overrides.get('base_time'): s1.manual_base_time = str(overrides.get('base_time'))
+                        s1.force_run = True
+
                     active_strategies.append(s1)
-                    loaded_names.append(f"V4[{'P' if is_paper else 'L'}]")
+                    mode_label = 'P' if is_paper else 'L'
+                    loaded_names.append(f"V4[{mode_label}]")
                 except Exception as e:
                     logger.error(f"Failed to load V4: {e}")
                     
@@ -277,11 +393,25 @@ def start():
             if strat_id == "v4_gamma":
                 try:
                     from strategy.v4_trailing_sl_strategy import NiftyV4TrailingSLStrategy
-                    s1 = NiftyV4TrailingSLStrategy(expiry_date)
+                    active_expiry = expiry_date
+                    if overrides and overrides.get('expiry'):
+                        active_expiry = overrides.get('expiry')
+                        
+                    s1 = NiftyV4TrailingSLStrategy(active_expiry)
                     s1.dhan = dhan
                     s1.paper_trade = is_paper
+                    
+                    if overrides:
+                        if overrides.get('qty'): 
+                            try: s1.lot_size = int(overrides.get('qty'))
+                            except: pass
+                        if overrides.get('index_id'): s1.index_id = str(overrides.get('index_id'))
+                        if overrides.get('base_time'): s1.manual_base_time = str(overrides.get('base_time'))
+                        s1.force_run = True
+
                     active_strategies.append(s1)
-                    loaded_names.append(f"V4[{'P' if is_paper else 'L'}]")
+                    mode_label = 'P' if is_paper else 'L'
+                    loaded_names.append(f"V4[{mode_label}]")
                 except Exception as e:
                     logger.error(f"Failed to load V4: {e}")
                     

@@ -75,7 +75,9 @@ class NiftyGammaSpikeStrategy:
             if spot > 0:
                 self.benchmark_spot = spot
                 self.benchmark_straddle = ce_p + pe_p
-                logger.info(f"📍 Benchmark Set | Spot: {spot} | Straddle: {round(self.benchmark_straddle, 2)}")
+                logger.info(f"📍 Benchmark Set (Gamma Blast) | Spot: {spot} | Straddle: {round(self.benchmark_straddle, 2)}")
+            else:
+                logger.warning(f"Benchmark Set (Gamma Blast) Failed: Could not fetch spot > 0 for expiry {self.target_expiry}.")
         except Exception as e:
             logger.error(f"Failed to capture benchmark: {e}")
 
@@ -93,8 +95,8 @@ class NiftyGammaSpikeStrategy:
         if now.hour == 13 and now.minute == 45 and self.benchmark_straddle is None:
             self.capture_benchmark()
             
-        # Paper Trade Helper: Auto-set benchmark if we started late
-        if self.paper_trade and self.benchmark_straddle is None and (now.hour > 13 or (now.hour == 13 and now.minute > 45)):
+        # Auto-set benchmark if we started late
+        if self.benchmark_straddle is None and (now.hour > 13 or (now.hour == 13 and now.minute > 45)):
             self.capture_benchmark()
 
         if self.in_position:
@@ -110,7 +112,9 @@ class NiftyGammaSpikeStrategy:
         """Matches the 'Gamma Blast' backtest entry logic."""
         try:
             spot, ce_p, pe_p, ce_vol, pe_vol, vix, ce_id, pe_id = self.get_live_data()
-            if spot == 0 or self.benchmark_spot == 0: return
+            if spot == 0 or self.benchmark_spot == 0: 
+                logger.warning(f"Entry Check (Gamma Blast) skipped: Spot is 0. Cannot calculate straddle.")
+                return
 
             current_straddle = ce_p + pe_p
             
@@ -119,6 +123,9 @@ class NiftyGammaSpikeStrategy:
             
             # 2. Momentum check (0.10% of spot price)
             momentum_hit = abs(ce_p - pe_p) > 0 
+            
+            iv_diff = round((current_straddle/self.benchmark_straddle - 1)*100, 2)
+            logger.info(f"Entry Check (Gamma Blast) | Spot: {spot} | VIX: {vix} | Benchmark Straddle: {self.benchmark_straddle:.1f} | Curr Straddle: {current_straddle:.1f} | IV Chg: {iv_diff}%")
             
             if iv_expansion_hit and vix >= self.vix_threshold and momentum_hit:
                 # Directional selection based on trend from benchmark

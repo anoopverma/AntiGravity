@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Expiry Calendar — AntiGravity</title>
+    <meta name="description" content="View upcoming weekly option expiry dates for NIFTY 50, BANKNIFTY, SENSEX, FINNIFTY and MIDCPNIFTY.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+</head>
+<body>
+    <div class="container">
+
+        <!-- Header -->
+        <div class="header">
+            <div class="header-left">
+                <h1>📅 <span>Expiry Calendar</span></h1>
+                <p>Real-time tracked option expiries for Indian indices</p>
+            </div>
+            <div class="nav-links">
+                <a href="/" class="nav-btn primary">← Dashboard</a>
+                <a href="/backtest" class="nav-btn">Backtest</a>
+                <a href="/logout" class="nav-btn">Sign Out</a>
+            </div>
+        </div>
+
+        <!-- Today chip -->
+        <div class="today-chip">
+            🗓 Today: <b id="today-label">Loading…</b>
+        </div>
+
+        <!-- Error -->
+        <div id="error-msg"></div>
+
+        <!-- Cards (Nearest) -->
+        <div class="section-header" style="margin-top: 0;">
+            <div class="section-title">Nearest Expiries</div>
+            <button class="refresh-btn" onclick="loadExpiries()">↻ Refresh All</button>
+        </div>
+        <div class="grid" id="cards-grid">
+            <!-- populated by JS -->
+        </div>
+
+        <!-- Calendar Section -->
+        <div class="section-header">
+            <div class="section-title">3-Month Calendar</div>
+            <div class="filter-group">
+                <label for="index-filter" style="font-size:0.8rem; color:var(--text-dim);">Filter Index:</label>
+                <select id="index-filter" class="index-select" onchange="applyFilter()">
+                    <option value="ALL">All Indices</option>
+                    <option value="NIFTY 50">NIFTY 50</option>
+                    <option value="BANKNIFTY">BANKNIFTY</option>
+                    <option value="SENSEX">SENSEX</option>
+                    <option value="FINNIFTY">FINNIFTY</option>
+                </select>
+            </div>
+        </div>
+        <div class="table-wrap calendar-table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Script</th>
+                        <th>Expiry Date</th>
+                        <th>Day</th>
+                        <th>Source</th>
+                    </tr>
+                </thead>
+                <tbody id="calendar-tbody">
+                    <tr><td colspan="4" style="color:var(--text-dim); text-align:center; padding:3rem;">Loading calendar…</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="last-updated" id="last-updated"></div>
+    </div>
+
+    <script>
+        /* ── Helpers ────────────────────────────────── */
+        let calendarData = []; // Local cache for filtering
+
+        const CARD_CLASS = {
+            'NIFTY 50':   'card-nifty',
+            'BANKNIFTY':  'card-banknifty',
+            'SENSEX':     'card-sensex',
+            'FINNIFTY':   'card-finnifty'
+        };
+        const DOT_CLASS = {
+            'NIFTY 50':   'dot-nifty',
+            'BANKNIFTY':  'dot-banknifty',
+            'SENSEX':     'dot-sensex',
+            'FINNIFTY':   'dot-finnifty'
+        };
+
+        function daysAway(isoStr) {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const target = new Date(isoStr);
+            return Math.round((target - today) / 86400000);
+        }
+
+        function badgeHtml(days) {
+            if (days === 0) return `<span class="card-days-badge badge-today">⚡ Today</span>`;
+            if (days < 0) return `<span class="card-days-badge badge-normal">Expired</span>`;
+            if (days <= 2)  return `<span class="card-days-badge badge-soon">${days}d left</span>`;
+            return `<span class="card-days-badge badge-normal">${days}d to go</span>`;
+        }
+
+        /* ── Main fetch ─────────────────────────────── */
+        async function loadExpiries() {
+            const errBox = document.getElementById('error-msg');
+            errBox.style.display = 'none';
+            try {
+                // 1. Fetch nearest
+                const res1 = await fetch('/api/expiries');
+                const json1 = await res1.json();
+                if (json1.status === 'success') renderCards(json1.data);
+
+                // 2. Fetch full calendar
+                const res2 = await fetch('/api/expiries/all');
+                const json2 = await res2.json();
+                if (json2.status === 'success') {
+                    calendarData = json2.data;
+                    applyFilter();
+                }
+
+                document.getElementById('last-updated').textContent =
+                    'Last synced: ' + new Date().toLocaleTimeString('en-IN', {timeZone:'Asia/Kolkata'}) + ' IST';
+
+            } catch (err) {
+                errBox.textContent = '⚠ Update Error: ' + err.message;
+                errBox.style.display = 'block';
+            }
+        }
+
+        function renderCards(data) {
+            const grid = document.getElementById('cards-grid');
+            grid.innerHTML = '';
+            data.filter(i => CARD_CLASS[i.script]).forEach(item => {
+                const days     = daysAway(item.expiry_iso);
+                const cardCls  = CARD_CLASS[item.script] || '';
+                const card = document.createElement('div');
+                card.className = `expiry-card ${cardCls}`;
+                card.innerHTML = `
+                    <div class="card-label">Next Up</div>
+                    <div class="card-script">${item.script}</div>
+                    <div class="card-expiry-date">${item.expiry}</div>
+                    ${badgeHtml(days)}
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        function applyFilter() {
+            const filterVal = document.getElementById('index-filter').value;
+            const filtered = filterVal === 'ALL' 
+                ? calendarData 
+                : calendarData.filter(i => i.script === filterVal);
+            renderCalendar(filtered);
+        }
+
+        function renderCalendar(data) {
+            const tbody = document.getElementById('calendar-tbody');
+            tbody.innerHTML = '';
+            if (data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" style="color:var(--text-dim); text-align:center; padding:3rem;">No records found.</td></tr>';
+                return;
+            }
+            data.forEach(item => {
+                const dotCls = DOT_CLASS[item.script] || '';
+                const tr = document.createElement('tr');
+                const sourceCls = item.source === 'holiday-adjusted' ? 'source-holiday' : '';
+                tr.innerHTML = `
+                    <td><span class="dot ${dotCls}"></span><strong>${item.script}</strong></td>
+                    <td style="font-family:monospace; font-weight:500;">${item.expiry}</td>
+                    <td style="color:var(--text-dim);">${item.day_label}</td>
+                    <td><span class="source-tag ${sourceCls}">${item.source}</span></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        /* ── Init ───────────────────────────────────── */
+        window.addEventListener('DOMContentLoaded', () => {
+            const now = new Date();
+            const opts = { weekday:'long', year:'numeric', month:'long', day:'numeric', timeZone:'Asia/Kolkata' };
+            document.getElementById('today-label').textContent = now.toLocaleDateString('en-IN', opts);
+            loadExpiries();
+        });
+    </script>
+</body>
+</html>

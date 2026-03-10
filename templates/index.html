@@ -6,276 +6,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AntiGravity Strategy Engine</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
-    <style>
-        :root {
-            --bg-dark: #0f1115;
-            --bg-card: #1c1f26;
-            --text-main: #f0f0f0;
-            --text-dim: #8b949e;
-            --accent: #238636;
-            --danger: #da3633;
-            --warning: #e3b341;
-            --border: #30363d;
-        }
-
-        body {
-            font-family: 'Inter', -apple-system, sans-serif;
-            background-color: var(--bg-dark);
-            color: var(--text-main);
-            margin: 0;
-            padding: 2rem;
-        }
-
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-        }
-
-        h1 {
-            margin-top: 0;
-            font-weight: 600;
-            font-size: 1.5rem;
-        }
-
-        .card {
-            background-color: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 1.5rem;
-            margin-bottom: 1.5rem;
-        }
-
-        .dashboard-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 1.5rem;
-            margin-bottom: 1.5rem;
-        }
-
-        .card-title {
-            color: var(--text-dim);
-            font-size: 0.85rem;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            margin-bottom: 0.5rem;
-        }
-
-        .card-value {
-            font-size: 1.8rem;
-            font-weight: 700;
-        }
-
-        .controls {
-            display: flex;
-            gap: 1rem;
-            flex-wrap: wrap;
-            margin-bottom: 1.5rem;
-        }
-
-        button {
-            padding: 0.75rem 1.5rem;
-            border: none;
-            border-radius: 6px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: opacity 0.2s;
-        }
-
-        button:hover {
-            opacity: 0.85;
-        }
-
-        .btn-start {
-            background-color: var(--accent);
-            color: white;
-        }
-
-        .btn-pause {
-            background-color: var(--warning);
-            color: #111;
-        }
-
-        .btn-exit {
-            background-color: var(--danger);
-            color: white;
-        }
-
-        .btn-close-all {
-            background: linear-gradient(135deg, #dc2626, #991b1b);
-            color: white;
-            border: 2px solid #f87171;
-            animation: pulse-danger 2s infinite;
-        }
-
-        @keyframes pulse-danger {
-
-            0%,
-            100% {
-                box-shadow: 0 0 0 0 rgba(248, 113, 113, 0.4);
-            }
-
-            50% {
-                box-shadow: 0 0 12px 4px rgba(248, 113, 113, 0.2);
-            }
-        }
-
-        .log-container {
-            background-color: #0d1117;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            height: 250px;
-            overflow-y: auto;
-            padding: 1rem;
-            font-family: monospace;
-            font-size: 0.85rem;
-            color: var(--text-dim);
-        }
-
-        .log-entry {
-            margin-bottom: 0.25rem;
-        }
-
-        .log-time {
-            color: var(--accent);
-            margin-right: 0.5rem;
-        }
-
-        .status-badge {
-            display: inline-block;
-            padding: 0.25rem 0.5rem;
-            border-radius: 4px;
-            font-size: 0.75rem;
-            font-weight: 600;
-        }
-
-        .status-active {
-            background-color: rgba(35, 134, 54, 0.2);
-            color: #4ade80;
-        }
-
-        .status-paused {
-            background-color: rgba(227, 179, 65, 0.2);
-            color: #facc15;
-        }
-
-        .status-stopped {
-            background-color: rgba(139, 148, 158, 0.2);
-            color: var(--text-dim);
-        }
-
-        .table-container {
-            width: 100%;
-            overflow-x: auto;
-            margin-top: 1rem;
-            max-height: 400px;
-            overflow-y: auto;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 0.85rem;
-        }
-
-        th,
-        td {
-            padding: 0.75rem;
-            text-align: left;
-            border-bottom: 1px solid var(--border);
-        }
-
-        th {
-            background-color: #0d1117;
-            color: var(--text-dim);
-            position: sticky;
-            top: 0;
-        }
-
-        .win {
-            color: #4ade80;
-        }
-
-        .header-bar {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 1.5rem;
-        }
-
-        .btn-logout {
-            background: transparent;
-            border: 1px solid var(--border);
-            color: var(--text-dim);
-            padding: 0.45rem 1rem;
-            border-radius: 6px;
-            font-size: 0.82rem;
-            font-family: inherit;
-            cursor: pointer;
-            transition: all 0.2s;
-            text-decoration: none;
-            display: inline-block;
-        }
-
-        .btn-logout:hover {
-            border-color: var(--danger);
-            color: var(--danger);
-            opacity: 1;
-        }
-
-        .pos-table th,
-        .pos-table td {
-            padding: 0.6rem 0.9rem;
-            text-align: left;
-            border-bottom: 1px solid var(--border);
-            font-size: 0.84rem;
-        }
-
-        .pos-table th {
-            background-color: #0d1117;
-            color: var(--text-dim);
-        }
-
-        .pos-table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        .dir-buy {
-            background: rgba(74, 222, 128, 0.15);
-            color: #4ade80;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-size: 0.75rem;
-            font-weight: 700;
-        }
-
-        .dir-sell {
-            background: rgba(248, 113, 113, 0.15);
-            color: #f87171;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-size: 0.75rem;
-            font-weight: 700;
-        }
-
-        .pnl-pos {
-            color: #4ade80;
-            font-weight: 600;
-        }
-
-        .pnl-neg {
-            color: #f87171;
-            font-weight: 600;
-        }
-    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
 </head>
 
 <body>
     <div class="container">
         <div class="header-bar">
-            <h1>⚡ AntiGravity — Live Execution Monitor</h1>
-            <div style="display:flex;gap:0.75rem;align-items:center;">
-                <a href="/backtest" class="btn-logout" style="border-color:#1e3c72;color:#93c5fd;">Backtest Runner →</a>
+            <h1>⚡ AntiGravity — Live Monitor</h1>
+            <div class="nav-links">
+                <a href="/expiries" class="nav-btn" style="border-color:#4f3b7a;color:#a371f7;">📅 Expiry Calendar</a>
+                <a href="/backtest" class="nav-btn" style="border-color:#1e3c72;color:#93c5fd;">Backtest Runner →</a>
                 <a href="/logout" class="btn-logout">Sign Out →</a>
             </div>
         </div>
@@ -298,6 +38,38 @@
 
         <div class="card">
             <div class="card-title">▶ Select Strategies for LIVE Trading (Actual Money)</div>
+            <!-- Manual Overrides Section -->
+            <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; margin-bottom: 2rem;">
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 1.25rem;">
+                    <input type="checkbox" id="override-enabled" style="width: 20px; height: 20px; cursor: pointer;">
+                    <label for="override-enabled" style="margin: 0; font-size: 0.9rem; color: var(--text-main); cursor: pointer; text-transform: none;">Enable Manual Overrides (Run on any day/time)</label>
+                </div>
+                
+                <div class="config-flex" id="override-controls" style="opacity: 0.5; pointer-events: none; transition: all 0.2s;">
+                    <div class="form-group">
+                        <label>Target Index</label>
+                        <select id="over-index">
+                            <option value="13">NIFTY 50 (13)</option>
+                            <option value="25">BANKNIFTY (25)</option>
+                            <option value="51">FINNIFTY (51)</option>
+                            <option value="1">SENSEX (1)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Expiry Date</label>
+                        <input type="date" id="over-expiry">
+                    </div>
+                    <div class="form-group">
+                        <label>Quantity (Lots)</label>
+                        <input type="number" id="over-qty" placeholder="e.g. 75">
+                    </div>
+                    <div class="form-group">
+                        <label>Base Time (HH:mm)</label>
+                        <input type="time" id="over-base-time" value="13:45">
+                    </div>
+                </div>
+            </div>
+
             <table class="pos-table" id="live-strategies-table" style="margin-bottom: 1.5rem;">
                 <thead>
                     <tr>
@@ -365,6 +137,23 @@
             </div>
 
             <div class="card">
+                <div class="card-title">📅 Upcoming Script Expiries</div>
+                <table class="pos-table" id="expiries-table">
+                    <thead>
+                        <tr>
+                            <th>Script Name</th>
+                            <th>Next Expiry Date</th>
+                        </tr>
+                    </thead>
+                    <tbody id="expiries-tbody">
+                        <tr>
+                            <td colspan="2" style="text-align:center;color:var(--text-dim);padding:1.5rem;">Loading expiries...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="card">
                 <div class="card-title">System Logs</div>
                 <div class="log-container" id="logs">
                     <div class="log-entry"><span class="log-time">[System]</span> UI initialized.</div>
@@ -416,6 +205,27 @@
         </div>
 
         <script>
+            async function fetchExpiries() {
+                try {
+                    const res = await fetch('/api/expiries');
+                    const json = await res.json();
+                    if (json.status === 'success' && json.data) {
+                        const tbody = document.getElementById('expiries-tbody');
+                        tbody.innerHTML = '';
+                        json.data.forEach(item => {
+                            const tr = document.createElement('tr');
+                            tr.innerHTML = `
+                                <td style="font-weight:600; color: #e2e8f0;">${item.script}</td>
+                                <td style="color: #93c5fd;">${item.expiry}</td>
+                            `;
+                            tbody.appendChild(tr);
+                        });
+                    }
+                } catch (err) {
+                    console.error('Failed to fetch expiries:', err);
+                }
+            }
+
             async function fetchStatus() {
                 try {
                     const res = await fetch('/api/status');
@@ -483,7 +293,18 @@
                             const confirmed = confirm("⚠️ WARNING: You have selected LIVE mode for some strategies! This will execute real trades on Dhan with actual money. Proceed?");
                             if (!confirmed) return;
                         }
-                        payload = { live: liveSelected, paper: paperSelected };
+
+                        let overrides = null;
+                        if (document.getElementById('override-enabled').checked) {
+                            overrides = {
+                                index_id: document.getElementById('over-index').value,
+                                expiry: document.getElementById('over-expiry').value,
+                                qty: document.getElementById('over-qty').value,
+                                base_time: document.getElementById('over-base-time').value
+                            };
+                        }
+
+                        payload = { live: liveSelected, paper: paperSelected, overrides: overrides };
                     } else {
                         // For pause, resume, stop, specify which type to target: 'live', 'paper', 'all'
                         payload = { target: targetType };
@@ -553,17 +374,39 @@
                     console.error('Positions fetch failed', err);
                 }
             }
+            
+            async function fetchSystemLogs() {
+                try {
+                    const res = await fetch('/api/system_logs');
+                    const data = await res.json();
+                    const logsDiv = document.getElementById('logs');
+                    if (data.status === 'success' && data.logs) {
+                        const html = data.logs.map(log => `<div class="log-entry" style="white-space: pre-wrap;">${log.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>`).join('');
+                        
+                        const isAtBottom = logsDiv.scrollHeight - logsDiv.clientHeight <= logsDiv.scrollTop + 50;
+                        logsDiv.innerHTML = html;
+                        if (isAtBottom) {
+                            logsDiv.scrollTop = logsDiv.scrollHeight;
+                        }
+                    }
+                } catch (err) {
+                    console.error('System logs fetch failed', err);
+                }
+            }
 
             let _posInterval = null;
             let _statusInterval = null;
+            let _logInterval = null;
 
             function togglePositionRefresh() {
                 const btn = document.getElementById('pos-refresh-btn');
                 if (_posInterval) {
                     clearInterval(_posInterval);
                     clearInterval(_statusInterval);
+                    clearInterval(_logInterval);
                     _posInterval = null;
                     _statusInterval = null;
+                    _logInterval = null;
                     btn.textContent = '▶ Live Refresh';
                     btn.style.background = 'rgba(35,134,54,0.2)';
                     btn.style.borderColor = '#238636';
@@ -571,8 +414,10 @@
                 } else {
                     fetchPositions();
                     fetchStatus();
+                    fetchSystemLogs();
                     _posInterval = setInterval(fetchPositions, 5000);
                     _statusInterval = setInterval(fetchStatus, 2000);
+                    _logInterval = setInterval(fetchSystemLogs, 3000);
                     btn.textContent = '⏹ Stop Refresh';
                     btn.style.background = 'rgba(248,113,113,0.15)';
                     btn.style.borderColor = '#f87171';
@@ -582,6 +427,25 @@
 
             // Initialization on page load
             fetchStatus();
+            fetchSystemLogs();
+
+            // Toggle override UI state
+            document.getElementById('override-enabled').addEventListener('change', function(e) {
+                const controls = document.getElementById('override-controls');
+                if (e.target.checked) {
+                    controls.style.opacity = '1';
+                    controls.style.pointer_events = 'auto';
+                    controls.style.pointerEvents = 'auto';
+                    // Auto-fill today's date if empty
+                    if (!document.getElementById('over-expiry').value) {
+                        const today = new Date().toISOString().split('T')[0];
+                        document.getElementById('over-expiry').value = today;
+                    }
+                } else {
+                    controls.style.opacity = '0.5';
+                    controls.style.pointerEvents = 'none';
+                }
+            });
         </script>
 </body>
 
