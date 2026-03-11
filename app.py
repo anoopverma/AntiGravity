@@ -131,6 +131,10 @@ def strategy_loop():
 
 # ── Routes ───────────────────────────────────────────────────────────────────
 
+@app.route('/health', methods=['GET'])
+def health():
+    return jsonify({"status": "ok"}), 200
+
 @app.route('/login', methods=['GET', 'POST'])
 def login_page():
     if session.get("logged_in"):
