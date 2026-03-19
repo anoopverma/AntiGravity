@@ -156,6 +156,7 @@
                             <th>ROI%</th>
                             <th>Cap ROI%</th>
                             <th>Reason</th>
+                            <th>Parameters</th>
                         </tr>
                     </thead>
                     <tbody id="backtest-tbody">
@@ -367,6 +368,7 @@
                     <td>${roi.toFixed(2)}%</td>
                     <td style="font-weight:600;">${(parseFloat(row['Capital_ROI%']) || 0).toFixed(2)}%</td>
                     <td>${row.Reason || '-'}</td>
+                    <td style="font-size:0.70rem; color:#8b949e; max-width:260px; word-break:break-all;">${row.Parameters || '-'}</td>
                 `;
                 tbody.appendChild(tr);
             });
@@ -378,10 +380,10 @@
 
             document.getElementById('backtest-tfoot').innerHTML = `
                 <tr style="background-color: #161b22; font-weight: bold; border-top: 2px solid #30363d;">
-                    <td colspan="13" style="text-align: left; color: #ffffff;">📊 Records: ${totalTrades} Trades | Accuracy: <span style="color:#60a5fa">${accuracy}%</span></td>
+                    <td colspan="14" style="text-align: left; color: #ffffff;">📊 Records: ${totalTrades} Trades | Accuracy: <span style="color:#60a5fa">${accuracy}%</span></td>
                     <td class="${totalPnL > 0 ? 'win' : 'loss'}">₹${totalPnL.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                     <td class="${totalROI > 0 ? 'win' : 'loss'}">${totalROI.toFixed(2)}%</td>
-                    <td colspan="3"></td>
+                    <td colspan="4"></td>
                 </tr>
             `;
 
@@ -628,7 +630,7 @@
             const cols = [
                 'Run_Date', 'Run_Mode', 'Strategy_Name', 'Date', 'Strike', 'Option_Type',
                 'Action', 'Qty', 'Entry_Time', 'Exit_Time', 'Buy_Price', 'Peak_Price',
-                'Sell_Price', 'PNL', 'ROI%', 'Capital_ROI%', 'Reason'
+                'Sell_Price', 'PNL', 'ROI%', 'Capital_ROI%', 'Reason', 'Parameters'
             ];
 
             let csvContent = "";

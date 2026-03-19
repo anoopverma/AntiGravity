@@ -1,99 +1,290 @@
+"""
+backtest_gamma.py — Gamma Spike SELL Strategy Backtest
+Morning session: benchmark at 9:20 AM, entry window 9:30–11:30 AM.
+SELLs the spiked leg (overpriced premium), buys back at target profit or SL.
+Saves results to DB under strategy_name = 'v4_gamma_sell'.
+"""
+
 import os
+import sys
 import time
+import pickle
 import logging
 import pandas as pd
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
-from dhanhq import dhanhq
+from sqlalchemy import create_engine
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
+# Reuse OptionFetcher from backtest_v4
+sys.path.insert(0, os.path.dirname(__file__))
+from backtest_v4 import OptionFetcher
+
+load_dotenv()
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Load environment variables (Support both standard and Render env var names)
-CLIENT_ID = os.getenv('DHAN_CLIENT_ID') or os.getenv('DHAN_API_KEY')
-ACCESS_TOKEN = os.getenv('DHAN_ACCESS_TOKEN') or os.getenv('DHAN_CLIENT_SECRET')
+# ── Strategy Parameters ─────────────────────────────────────────────────────
+LEG_EXPANSION    = 1.20   # individual CE or PE must spike 20% from benchmark to SELL
+MIN_SELL_PRICE   = 20.0   # min premium to sell (too cheap = high gamma risk)
+BENCHMARK_TIME  = "09:20" # capture baseline at this bar
+ENTRY_START      = "09:30" # start watching for spikes
+ENTRY_CUTOFF     = "11:30" # no new sells after this
+TARGET_PCT       = 0.35   # buy back when premium drops 35% from sell price (profit)
+SL_PCT           = 0.40   # buy back if premium rises 40% from sell price (loss)
+QTY              = 1300
+INITIAL_CAPITAL  = 500_000
+# ────────────────────────────────────────────────────────────────────────────
 
-class BacktestGammaStrategy:
-    def __init__(self, client_id, access_token):
-        if not client_id or not access_token or client_id == "YOUR_DHAN_CLIENT_ID_HERE":
-            raise ValueError("Invalid Dhan API credentials. Please set them in .env")
-            
-        self.dhan = dhanhq(client_id, access_token)
 
-        self.security_id = "13" # NIFTY
-        self.exchange_segment = "IDX_I" # For index
-        
-    def get_past_tuesdays(self, num_weeks=4):
-        """Get the dates of the last `num_weeks` Tuesdays."""
-        today = datetime.now()
-        # Find the most recent Tuesday
-        offset = (today.weekday() - 1) % 7
-        last_tuesday = today - timedelta(days=offset)
-        
-        tuesdays = []
-        for i in range(num_weeks):
-            t_date = last_tuesday - timedelta(weeks=i)
-            tuesdays.append(t_date.strftime("%Y-%m-%d"))
-            
-        return tuesdays
-        
-    def run_backtest_for_date(self, target_date):
-        """Simulate the run for a specific past date."""
-        logger.info(f"--- Running Backtest for {target_date} ---")
-        
-        # In a real backtest with Dhan, we would use the historical API
-        # Since Dhan API historical data has specific limits and required fields,
-        # we try fetching minute data for the index on that date to simulate the price movement.
-        
+def get_last_n_nifty_expiries(n=48):
+    SWITCH_DATE = datetime(2024, 4, 4)
+    today = datetime.now()
+    expiries = []
+    d = today
+    while len(expiries) < n:
+        if d >= SWITCH_DATE:
+            days_since_tue = (d.weekday() - 1) % 7
+            expiry = d - timedelta(days=days_since_tue)
+        else:
+            days_since_thu = (d.weekday() - 3) % 7
+            expiry = d - timedelta(days=days_since_thu)
+        expiry_str = expiry.strftime("%Y-%m-%d")
+        if expiry_str not in expiries and expiry.date() < today.date():
+            expiries.append(expiry_str)
+        d -= timedelta(days=7)
+    return sorted(expiries)
+
+
+class GammaSpikeBacktester:
+    CACHE_FILE = "/tmp/gamma_option_cache.pkl"
+
+    def __init__(self):
+        ACCESS_TOKEN = os.getenv("DHAN_ACCESS_TOKEN")
+        self.fetcher = OptionFetcher(ACCESS_TOKEN)
+        self.initial_capital = INITIAL_CAPITAL
+        self.current_capital = INITIAL_CAPITAL
+        self.results = []
+
+        # Load disk cache so re-runs skip API calls
+        if os.path.exists(self.CACHE_FILE):
+            try:
+                with open(self.CACHE_FILE, 'rb') as f:
+                    self.fetcher.cache = pickle.load(f)
+                logger.info(f"Loaded disk cache: {len(self.fetcher.cache)} entries from {self.CACHE_FILE}")
+            except Exception:
+                logger.warning("Disk cache unreadable — starting fresh.")
+
+        self.params_str = (
+            f"SELL|leg_spike={LEG_EXPANSION*100:.0f}%|"
+            f"target={TARGET_PCT*100:.0f}%|"
+            f"sl={SL_PCT*100:.0f}%|"
+            f"min_sell={MIN_SELL_PRICE}|"
+            f"bench={BENCHMARK_TIME}|"
+            f"entry={ENTRY_START}-{ENTRY_CUTOFF}"
+        )
+        self.strategy_name = 'gamma_blast'
+
+    def run(self):
+        dates = get_last_n_nifty_expiries(48)
+        logger.info(f"Gamma Spike Backtest — {len(dates)} Nifty expiry days")
+        logger.info(f"Params: {self.params_str}")
+        self.current_capital = self.initial_capital
+
+        for date_str in dates:
+            logger.info(f"--- {date_str} ---")
+
+            ce_data = self.fetcher.fetch(date_str, 'C')
+            if not ce_data:
+                time.sleep(0.3)
+                ce_data = self.fetcher.fetch(date_str, 'C')
+            pe_data = self.fetcher.fetch(date_str, 'P')
+            if not pe_data:
+                time.sleep(0.3)
+                pe_data = self.fetcher.fetch(date_str, 'P')
+
+            # Save to disk cache after each date
+            try:
+                with open(self.CACHE_FILE, 'wb') as f:
+                    pickle.dump(self.fetcher.cache, f)
+            except Exception:
+                pass
+
+            if not ce_data or not pe_data:
+                logger.warning(f"  No data for {date_str}")
+                continue
+
+            sorted_times = sorted(ce_data.keys())
+
+            # ── Capture benchmark at 9:20 AM ──────────────────────────────
+            bm_h = int(BENCHMARK_TIME.split(":")[0])
+            bm_m = int(BENCHMARK_TIME.split(":")[1])
+            benchmark_ce = benchmark_pe = benchmark_spot = None
+            for dt in sorted_times:
+                if dt.hour == bm_h and dt.minute == bm_m:
+                    benchmark_ce   = ce_data[dt]["close"]
+                    benchmark_pe   = pe_data.get(dt, {}).get("close")
+                    benchmark_spot = ce_data[dt]["strike"]
+                    break
+
+            if not benchmark_ce or not benchmark_pe:
+                logger.warning(f"  No {BENCHMARK_TIME} bar for {date_str}")
+                continue
+
+            logger.info(f"  Benchmark {BENCHMARK_TIME} | CE:{benchmark_ce:.2f} PE:{benchmark_pe:.2f} Spot≈{benchmark_spot}")
+
+            start_h  = int(ENTRY_START.split(":")[0])
+            start_m  = int(ENTRY_START.split(":")[1])
+            cutoff_h = int(ENTRY_CUTOFF.split(":")[0])
+            cutoff_m = int(ENTRY_CUTOFF.split(":")[1])
+            position   = None
+            entry_time = None
+
+            for dt in sorted_times:
+                after_start   = dt.hour > start_h or (dt.hour == start_h and dt.minute >= start_m)
+                before_cutoff = dt.hour < cutoff_h or (dt.hour == cutoff_h and dt.minute <= cutoff_m)
+
+                # ── Entry check: SELL the spiked leg ───────────────────────────
+                if after_start and before_cutoff and position is None:
+                    ce_p = ce_data[dt]["close"]
+                    pe_p = pe_data.get(dt, {}).get("close", 0)
+                    if not ce_p or not pe_p:
+                        continue
+
+                    ce_exp = ce_p / benchmark_ce
+                    pe_exp = pe_p / benchmark_pe
+
+                    # Sell whichever leg spiked more (overpriced — mean revert)
+                    if max(ce_exp, pe_exp) >= LEG_EXPANSION:
+                        opt_type    = 'C' if ce_exp >= pe_exp else 'P'
+                        sell_price  = ce_p if opt_type == 'C' else pe_p
+
+                        if sell_price < MIN_SELL_PRICE:
+                            logger.info(f"  Skip SELL: premium {sell_price:.2f} < min {MIN_SELL_PRICE}")
+                            continue
+
+                        position = {
+                            'type':   opt_type,
+                            'entry':  sell_price,   # sell price
+                            'target': sell_price * (1 - TARGET_PCT),  # buy back at
+                            'sl':     sell_price * (1 + SL_PCT),       # cut loss at
+                        }
+                        entry_time = dt
+                        logger.info(
+                            f"  SELL {opt_type} @ {sell_price:.2f} "
+                            f"| CE+{(ce_exp-1)*100:.1f}% PE+{(pe_exp-1)*100:.1f}% "
+                            f"| Target≤{position['target']:.2f} | SL≥{position['sl']:.2f} "
+                            f"| {dt.strftime('%H:%M')}"
+                        )
+
+                # ── Position management: buy back to close ─────────────────────
+                if position and after_start:
+                    ce_p = ce_data[dt]["close"]
+                    pe_p = pe_data.get(dt, {}).get("close", 0)
+                    curr_price = ce_p if position['type'] == 'C' else pe_p
+                    if not curr_price:
+                        continue
+
+                    exit_triggered = False
+                    reason = ""
+
+                    # Target hit: premium decayed enough — BUY BACK (profit)
+                    if curr_price <= position['target']:
+                        exit_triggered = True
+                        reason = "Target Hit"
+
+                    # SL hit: premium rose — BUY BACK (loss)
+                    elif curr_price >= position['sl']:
+                        exit_triggered = True
+                        reason = "SL Hit"
+
+                    # Time exit at 11:30 AM
+                    is_eod = (dt.hour == 11 and dt.minute >= 30) or dt.hour > 11
+                    if (is_eod or dt == sorted_times[-1]) and not exit_triggered:
+                        exit_triggered = True
+                        reason = "Time Exit (11:30)"
+
+                    if exit_triggered:
+                        buy_back_price = curr_price
+                        entry          = position['entry']
+                        # SELL strategy: profit = sell_price - buy_back_price
+                        pnl = (entry - buy_back_price) * QTY
+                        cap_before = self.current_capital
+                        self.current_capital += pnl
+
+                        self.results.append({
+                            'Date':         date_str,
+                            'Entry_Time':   entry_time.strftime("%H:%M:%S"),
+                            'Exit_Time':    dt.strftime("%H:%M:%S"),
+                            'Option_Type':  position['type'],
+                            'Strike':       f"ATM-{date_str}-{position['type']}E",
+                            'Action':       'SELL',
+                            'Qty':          QTY,
+                            'Buy_Price':    round(buy_back_price, 2),   # buy back price
+                            'Peak_Price':   round(entry, 2),             # sell price = peak received
+                            'Sell_Price':   round(entry, 2),             # sold at
+                            'PNL':          round(pnl, 2),
+                            'ROI%':         round((entry - buy_back_price) / entry * 100, 2),
+                            'Capital_ROI%': round(pnl / cap_before * 100, 2) if cap_before > 0 else 0,
+                            'Reason':       reason,
+                            'Win':          pnl > 0,
+                            'Parameters':   self.params_str
+                        })
+                        logger.info(f"  BUY BACK @ {buy_back_price:.2f} | PnL: {pnl:,.0f} | {reason}")
+                        position = None
+                        break   # one trade per day
+
+        self.print_summary()
+        self.save_to_db()
+
+    def print_summary(self):
+        if not self.results:
+            print("\n No trades found — no gamma spikes met criteria.")
+            return
+        df = pd.DataFrame(self.results)
+        total_pnl    = df['PNL'].sum()
+        win_rate     = df['Win'].sum() / len(df) * 100
+        total_return = (self.current_capital - self.initial_capital) / self.initial_capital * 100
+
+        print(f"\n{'='*65}")
+        print(f"  GAMMA SPIKE BACKTEST — 48 Nifty Expiry Days")
+        print(f"  Params: {self.params_str}")
+        print(f"{'='*65}")
+        print(f"  Total Return : {total_return:.2f}%  (₹{total_pnl:,.0f})")
+        print(f"  Total Trades : {len(df)}")
+        print(f"  Win Rate     : {win_rate:.1f}%")
+        print()
+        cols = ['Date','Entry_Time','Exit_Time','Option_Type','Buy_Price','Peak_Price','Sell_Price','PNL','Reason','Win']
+        print(df[cols].to_string(index=False))
+        print()
+
+    def save_to_db(self):
+        if not self.results:
+            return
         try:
-            # Note: Dhan's actual historical API usually needs from_date and to_date
-            intraday_data = self.dhan.intraday_minute_data(
-                security_id=self.security_id,
-                exchange_segment=self.exchange_segment,
-                instrument_type="INDEX",
-                from_date=target_date,
-                to_date=target_date
-            )
-            
-            if intraday_data.get("status") == "success" and intraday_data.get("data"):
-                logger.info(f"Successfully fetched historical data for {target_date}")
-                
-                # Here we would iterate through the minute data, calculate the rolling Gamma,
-                # and trigger "BUY" when the spike ratio > 1.3
-                df = pd.DataFrame(intraday_data['data'])
-                if not df.empty:
-                    logger.info(f"Data shape: {df.shape}")
-                    logger.info("Simulating Gamma calculation over the day's price movement...")
-                    # Simulating a spike at 14:00 (Gamma explosions usually happen later in the day)
-                    spike_time = "14:00"
-                    logger.warning(f"[{target_date} {spike_time}] Simulated GAMMA SPIKE DETECTED!")
-                    logger.info(f"[{target_date} {spike_time}] Executed Long Straddle at simulated ATM.")
-                    logger.info(f"[{target_date} 15:15] Squared off position. Simulated P&L: +18.5%")
-            else:
-                logger.error(f"Failed to fetch data for {target_date}: {intraday_data}")
-                
-        except Exception as e:
-            logger.error(f"Error during backtest API call: {e}")
+            uri = os.getenv("POSTGRES_URI")
+            if not uri:
+                logger.warning("No POSTGRES_URI — skipping DB save.")
+                return
+            engine = create_engine(uri)
+            run_ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            df_new = pd.DataFrame(self.results)
+            df_new.insert(0, 'Run_Date',       run_ts)
+            df_new.insert(1, 'Strategy_Name',  self.strategy_name)
+            df_new.insert(2, 'Run_Mode',        'Backtest')
 
-def main():
-    logger.info("Starting Gamma Strategy Backtester...")
-    try:
-        backtester = BacktestGammaStrategy(CLIENT_ID, ACCESS_TOKEN)
-        tuesdays = backtester.get_past_tuesdays(4) # Run for last 4 Tuesdays
-        
-        for t_date in tuesdays:
-            backtester.run_backtest_for_date(t_date)
-            time.sleep(1) # Rate limiting
-            
-    except ValueError as ve:
-        logger.error(str(ve))
-        logger.info("Please copy .env.example to .env and fill out your Dhan API credentials to run the backtest.")
-    except Exception as e:
-        logger.error(f"Unexpected error: {e}")
+            try:
+                existing = pd.read_sql("SELECT * FROM historical_backtests", con=engine)
+                existing = existing[existing['Strategy_Name'] != self.strategy_name]
+                df_final = pd.concat([existing, df_new], ignore_index=True)
+            except Exception:
+                df_final = df_new
+
+            df_final.to_sql('historical_backtests', con=engine, if_exists='replace', index=False)
+            logger.info(f"-> DB SYNC: v4_gamma_spike {len(df_new)} rows saved to historical_backtests.")
+        except Exception as e:
+            logger.error(f"DB Save failed: {e}")
+
 
 if __name__ == "__main__":
-    main()
+    bt = GammaSpikeBacktester()
+    bt.run()

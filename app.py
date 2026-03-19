@@ -53,8 +53,10 @@ def init_dhan():
     global dhan
     try:
         from dhanhq import dhanhq as _DhanHQ
+        from dhanhq.dhan_context import DhanContext
         if CLIENT_ID and ACCESS_TOKEN:
-            dhan = _DhanHQ(str(CLIENT_ID), str(ACCESS_TOKEN))
+            context = DhanContext(str(CLIENT_ID), str(ACCESS_TOKEN))
+            dhan = _DhanHQ(context)
             # Update active strategies if already booted
             if 'active_strategies' in globals() and active_strategies is not None:
                 for strat in active_strategies:
@@ -352,6 +354,21 @@ def start():
                     s2 = NiftyGammaSpikeStrategy(CLIENT_ID, ACCESS_TOKEN)
                     s2.dhan = dhan
                     s2.paper_trade = is_paper
+
+                    # Apply overrides — same pattern as v4_gamma
+                    if overrides and overrides.get('expiry'):
+                        s2.target_expiry = overrides.get('expiry')
+                    else:
+                        s2.target_expiry = expiry_date
+
+                    if overrides:
+                        if overrides.get('qty'):
+                            try: s2.lot_size = int(overrides.get('qty'))
+                            except: pass
+                        if overrides.get('base_time'):
+                            s2.benchmark_hour, s2.benchmark_min = map(int, overrides.get('base_time').split(':'))
+                        s2.force_run = True   # run on any day/time when overridden
+
                     active_strategies.append(s2)
                     loaded_names.append(f"GammaBlast[{'P' if is_paper else 'L'}]")
                 except Exception as e:
@@ -425,6 +442,20 @@ def start():
                     s2 = NiftyGammaSpikeStrategy(CLIENT_ID, ACCESS_TOKEN)
                     s2.dhan = dhan
                     s2.paper_trade = is_paper
+
+                    if overrides and overrides.get('expiry'):
+                        s2.target_expiry = overrides.get('expiry')
+                    else:
+                        s2.target_expiry = expiry_date
+
+                    if overrides:
+                        if overrides.get('qty'):
+                            try: s2.lot_size = int(overrides.get('qty'))
+                            except: pass
+                        if overrides.get('base_time'):
+                            s2.benchmark_hour, s2.benchmark_min = map(int, overrides.get('base_time').split(':'))
+                        s2.force_run = True
+
                     active_strategies.append(s2)
                     loaded_names.append(f"GammaBlast[{'P' if is_paper else 'L'}]")
                 except Exception as e:

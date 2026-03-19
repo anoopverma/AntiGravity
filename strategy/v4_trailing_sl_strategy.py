@@ -30,21 +30,24 @@ class NiftyV4TrailingSLStrategy:
         self.manual_base_time = None  # e.g. "13:45"
         self.force_run = False
         
-        # --- Champion V4 Parameters (+160% Backtest ROI) ---
-        self.initial_sl = 0.45        # Stop Loss at 45%
-        self.trailing_step = 0.15     # Trail by 15% once profitable
-        self.target_lock_in = 0.20    # Start trailing after 20% profit
-        self.vix_threshold = 12.0     # VIX must be >= 12.0
-        self.expansion_threshold = 1.15 # IV Expansion 15%
-        self.trend_filter_pct = 0.15  # Trend shift 0.15%
-        self.momentum_threshold = 0.001 # 0.10% momentum check
-        self.absolute_sl = 6.0        # Hard Floor SL at ₹6
+        # --- Backtest-Matched V4 Parameters ---
+        self.initial_sl          = 0.35        # Initial SL: 35% loss from entry
+        self.trailing_step       = 0.15        # Trail drops 15% from peak once profitable
+        self.target_lock_in      = 0.20        # Start trailing after 20% gain
+        self.vix_threshold       = 12.5        # VIX must be >= 12.5
+        self.expansion_threshold = 1.17        # Individual leg must expand 17% from 1:30 PM
+        self.spot_move_pct       = 0.003       # Spot must have moved >= 0.3% from benchmark
+        self.min_premium         = 5.0         # Min option premium to enter (avoids OTM junk)
+        self.absolute_sl         = 6.0         # Hard Floor SL at ₹6
+        self.entry_cutoff        = (15, 1)     # No new entries after 3:01 PM (hour, minute)
 
-        self.current_position = None # Stores { 'type': 'CE'/'PE', 'entry': 0.0, 'peak': 0.0, 'strike': 0 }
-        self.benchmark_straddle = None
-        self.benchmark_spot = None
-        self.unrealized_pnl = 0
-        self.realized_pnl = 0
+        self.current_position    = None
+        self.benchmark_straddle  = None
+        self.benchmark_spot      = None
+        self.benchmark_ce        = None   # individual CE price at 1:30 PM
+        self.benchmark_pe        = None   # individual PE price at 1:30 PM
+        self.unrealized_pnl      = 0
+        self.realized_pnl        = 0
         
     def get_live_data(self):
         """Fetches spot, atm prices, and VIX from Dhan."""
@@ -84,9 +87,11 @@ class NiftyV4TrailingSLStrategy:
         try:
             spot, ce_p, pe_p, _, _, _, _, _ = self.get_live_data()
             if spot > 0:
-                self.benchmark_spot = spot
+                self.benchmark_spot     = spot
                 self.benchmark_straddle = ce_p + pe_p
-                logger.info(f"📍 Benchmark Set (V4) | Spot: {spot} | Straddle: {round(self.benchmark_straddle, 2)}")
+                self.benchmark_ce       = ce_p    # save individual legs
+                self.benchmark_pe       = pe_p
+                logger.info(f"📍 Benchmark Set (V4) | Spot: {spot} | CE: {ce_p} | PE: {pe_p} | Straddle: {round(self.benchmark_straddle, 2)}")
             else:
                 logger.warning(f"Benchmark Set (V4) Failed: Could not fetch spot > 0 for expiry {self.target_expiry}. (Ensure valid expiry date and market hours)")
         except Exception as e:
@@ -108,8 +113,8 @@ class NiftyV4TrailingSLStrategy:
             if not self.in_position:
                 return
         
-        # Capture benchmark logic
-        base_h, base_m = 13, 45
+        # Capture benchmark logic — at 1:30 PM exactly (matches backtest)
+        base_h, base_m = 13, 30
         if self.manual_base_time:
             try:
                 base_h, base_m = map(int, self.manual_base_time.split(':'))
@@ -122,6 +127,12 @@ class NiftyV4TrailingSLStrategy:
         if self.benchmark_straddle is None and (now.hour > base_h or (now.hour == base_h and now.minute > base_m)):
             self.capture_benchmark()
 
+        # Entry window: after 1:30 PM benchmark time but NOT after 3:01 PM
+        ch, cm = self.entry_cutoff
+        past_benchmark = (now.hour > base_h or (now.hour == base_h and now.minute > base_m))
+        before_cutoff  = (now.hour < ch or (now.hour == ch and now.minute <= cm))
+        is_entry_window = past_benchmark and before_cutoff
+
         if self.in_position:
             if is_hard_sweep_time:
                 logger.warning("🕒 3:26 PM HARD SWEEP TRIGGERED. Forcing immediate position cleanup.")
@@ -132,29 +143,34 @@ class NiftyV4TrailingSLStrategy:
             self.check_entry()
 
     def check_entry(self):
-        """Matches the 'Champion' backtest entry logic."""
+        """Entry: individual CE or PE leg must expand >=17% from its 1:30 PM price."""
         try:
             spot, ce_p, pe_p, ce_vol, pe_vol, vix, ce_id, pe_id = self.get_live_data()
-            if spot == 0 or self.benchmark_spot == 0: 
-                logger.warning(f"Entry Check (V4) skipped: Spot is 0. Cannot calculate straddle.")
+            if spot == 0 or self.benchmark_spot == 0:
+                logger.warning("Entry Check skipped: Spot is 0.")
+                return
+            if not self.benchmark_ce or not self.benchmark_pe:
+                logger.warning("Entry Check skipped: Benchmark legs not set.")
                 return
 
-            current_straddle = ce_p + pe_p
-            
-            # 1. IV Expansion Filter (15%)
-            # This is the primary volatility trigger confirmed by backtesting (80% Win Rate)
-            iv_expansion_hit = current_straddle >= (self.benchmark_straddle * self.expansion_threshold)
-            
-            # 2. Momentum check (0.10% of spot price)
-            # This ensures we aren't buying into a dead/flat candle
-            momentum_hit = abs(ce_p - pe_p) > 0 # Simple live presence check
-            
-            iv_diff = round((current_straddle/self.benchmark_straddle - 1)*100, 2)
-            logger.info(f"Entry Check (V4) | Spot: {spot} | VIX: {vix} | Benchmark Straddle: {self.benchmark_straddle:.1f} | Curr Straddle: {current_straddle:.1f} | IV Chg: {iv_diff}%")
-            
-            
-            if iv_expansion_hit and vix >= self.vix_threshold and momentum_hit:
-                # Directional selection based on trend from benchmark
+            # Individual leg expansion check (17%)
+            ce_exp = ce_p / self.benchmark_ce
+            pe_exp = pe_p / self.benchmark_pe
+            leg_spike = max(ce_exp, pe_exp) >= self.expansion_threshold
+            spike_leg = 'CE' if ce_exp >= pe_exp else 'PE'
+            spike_pct = round((max(ce_exp, pe_exp) - 1) * 100, 2)
+
+            spot_move = abs(spot - self.benchmark_spot) / self.benchmark_spot
+            spot_move_hit = spot_move >= self.spot_move_pct
+
+            logger.info(
+                f"Entry Check (V4) | Spot: {spot} | VIX: {vix} | "
+                f"CE: {ce_p:.2f} ({ce_exp*100-100:+.1f}%) | PE: {pe_p:.2f} ({pe_exp*100-100:+.1f}%) | "
+                f"SpotMove: {round(spot_move*100,3)}% | LegSpike: {leg_spike}"
+            )
+
+            if leg_spike and vix >= self.vix_threshold and spot_move_hit:
+                # Direction: follow the spot from benchmark
                 if spot > self.benchmark_spot:
                     opt_type = 'CE'
                     price = ce_p
@@ -163,48 +179,53 @@ class NiftyV4TrailingSLStrategy:
                     opt_type = 'PE'
                     price = pe_p
                     security_id = pe_id
-                
+
+                # Min premium filter
+                if price < self.min_premium:
+                    logger.info(f"Entry skipped: premium ₹{price} < min ₹{self.min_premium}")
+                    return
+
                 atm_strike = int(round(spot / 50) * 50)
-                logger.info(f"🚀 V4 IV TRIGGERED | Type: {opt_type} | P: {price} | IV Change: +{round((current_straddle/self.benchmark_straddle - 1)*100, 2)}%")
+                logger.info(f"🚀 V4 ENTRY | {opt_type} @ ₹{price} | Strike: {atm_strike} | {spike_leg} spike +{spike_pct}%")
                 self.place_order(opt_type, price, atm_strike, security_id)
-                
+
         except Exception as e:
             logger.error(f"Entry check failed: {e}")
 
     def manage_position(self, force_exit=False):
-        """Matches the 'Champion' backtest trailing logic."""
+        """Trailing SL logic matching backtest exactly."""
         try:
             spot, ce_p, pe_p, _, _, _, _, _ = self.get_live_data()
             curr_price = ce_p if self.current_position['type'] == 'CE' else pe_p
-            
+
             entry = self.current_position['entry']
             if curr_price > self.current_position['peak']:
                 self.current_position['peak'] = curr_price
             peak = self.current_position['peak']
-            profit_pct = (peak - entry) / entry
-            
-            # Mathematical Target SL calculation (same logic as V4)
-            new_sl_val = entry * (1.0 - self.initial_sl)
-            if profit_pct >= 1.00:
-                new_sl_val = peak * 0.90
-            elif profit_pct >= self.target_lock_in:
-                trailing_steps = int((profit_pct - self.target_lock_in) / self.trailing_step)
-                base_lock = entry * 1.05 
-                new_sl_val = base_lock + (entry * self.trailing_step * trailing_steps)
-                
-            new_sl_val = round(max(6.0, new_sl_val), 1)
+
+            # --- Backtest-matched SL logic ---
+            if peak >= entry * (1 + self.target_lock_in):
+                # Trailing SL: 15% drop from peak
+                new_sl_val = peak * (1 - self.trailing_step)
+                sl_type = "Trailing SL"
+            else:
+                # Initial SL: 35% loss from entry
+                new_sl_val = entry * (1 - self.initial_sl)
+                sl_type = "Initial SL"
+
+            new_sl_val = round(max(self.absolute_sl, new_sl_val), 1)
             
             exit_triggered = False
             exit_price = curr_price
             reason = "hold"
             
             current_sl_val = self.current_position.get('current_sl_val', 0)
-            
-            # Trail Upwards only
+
+            # Trail upwards only
             if new_sl_val > current_sl_val:
                 self.current_position['current_sl_val'] = new_sl_val
-                logger.info(f"TRAILING SL ADVANCED TO: ₹{new_sl_val}")
-                
+                logger.info(f"📈 {sl_type} advanced → ₹{new_sl_val} (Peak: ₹{peak:.2f}, Entry: ₹{entry:.2f})")
+
                 if not self.paper_trade:
                     for order in getattr(self, 'live_sl_orders', []):
                         try:
@@ -218,21 +239,23 @@ class NiftyV4TrailingSLStrategy:
                                 disclosed_quantity=0,
                                 validity=self.dhan.DAY
                             )
-                            logger.info(f"Modified SL Order {order['id']} to ₹{new_sl_val}: {resp}")
+                            logger.info(f"Modified SL Order {order['id']} → ₹{new_sl_val}: {resp}")
                         except Exception as e:
                             logger.error(f"Failed to modify SL order {order['id']}: {e}")
-                            
+
             self.unrealized_pnl = (curr_price - entry) * self.lot_size
-            
-            # 5. Time Exit or Local Fallback SL hit
+
+            exit_triggered = False
+            exit_price = curr_price
+            reason = sl_type
+
             if force_exit:
                 exit_triggered = True
                 exit_price = curr_price
                 reason = "Time Exit"
             elif curr_price <= self.current_position.get('current_sl_val', 0):
                 exit_triggered = True
-                reason = f"SL Hit Locally (₹{self.current_position.get('current_sl_val', 0)})"
-                
+
             if exit_triggered:
                 self.close_position(exit_price, reason)
                 
@@ -241,7 +264,7 @@ class NiftyV4TrailingSLStrategy:
 
     def place_order(self, opt_type, price, strike, security_id):
         """Simulates or places a real order."""
-        initial_sl_val = round(max(6.0, price * (1.0 - self.initial_sl)), 1)
+        initial_sl_val = round(max(self.absolute_sl, price * (1.0 - self.initial_sl)), 1)
         
         self.current_position = {
             'type': opt_type,
@@ -370,6 +393,15 @@ class NiftyV4TrailingSLStrategy:
             uri = os.getenv("POSTGRES_URI")
             if uri:
                 engine = create_engine(uri)
+                params_str = (
+                    f"lock_in={self.target_lock_in*100:.0f}%|"
+                    f"trail={self.trailing_step*100:.0f}%|"
+                    f"init_sl={self.initial_sl*100:.0f}%|"
+                    f"leg_expansion={self.expansion_threshold*100:.0f}%|"
+                    f"min_prem={self.min_premium}|"
+                    f"cutoff={self.entry_cutoff[0]:02d}:{self.entry_cutoff[1]:02d}|"
+                    f"vix_thresh={self.vix_threshold}"
+                )
                 trade_record = {
                     'Run_Date': datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     'Strategy_Name': "v4_gamma",
@@ -388,7 +420,8 @@ class NiftyV4TrailingSLStrategy:
                     'ROI%': round(((price - old_position['entry']) / old_position['entry']) * 100, 2) if old_position['entry'] > 0 else 0,
                     'Capital_ROI%': round((pnl / 100000) * 100, 2),
                     'Reason': reason,
-                    'Win': pnl > 0
+                    'Win': pnl > 0,
+                    'Parameters': params_str
                 }
                 df = pd.DataFrame([trade_record])
                 table_name = "historical_backtests"
