@@ -31,7 +31,7 @@ class NiftyGammaSpikeStrategy:
         self.dhan = dhanhq(context)
 
         self.target_expiry   = None
-        self.lot_size        = 1300          # 20 lots × 65 qty
+        self.lot_size        = 65          # 20 lots × 65 qty
         self.running         = False
         self.paused          = False
         self.in_position     = False
@@ -124,6 +124,29 @@ class NiftyGammaSpikeStrategy:
         self.target_expiry = expiry_date
         now = datetime.datetime.now()
 
+        # ── 0. Heartbeat — log live state every tick so dashboard shows activity ─
+        try:
+            spot, ce_p, pe_p, _, _, vix, _, _ = self.get_live_data()
+            mode  = "Paper" if self.paper_trade else "LIVE"
+            bench = f"CE={self.benchmark_ce:.1f} PE={self.benchmark_pe:.1f}" if self.benchmark_ce else "awaiting bench"
+            if self.benchmark_ce and spot > 0:
+                ce_spk = (ce_p / self.benchmark_ce - 1) * 100 if self.benchmark_ce else 0
+                pe_spk = (pe_p / self.benchmark_pe - 1) * 100 if self.benchmark_pe else 0
+                logger.info(
+                    f"💓 GammaBlast [{mode}] | {now.strftime('%H:%M')} "
+                    f"| Spot={spot:.0f} | VIX={vix:.1f} "
+                    f"| CE={ce_p:.1f} ({ce_spk:+.1f}%) "
+                    f"| PE={pe_p:.1f} ({pe_spk:+.1f}%) "
+                    f"| Trigger≥20% | Pos={'OPEN' if self.in_position else 'none'}"
+                )
+            else:
+                logger.info(
+                    f"💓 GammaBlast [{mode}] | {now.strftime('%H:%M')} "
+                    f"| Spot={spot:.0f} | VIX={vix:.1f} | {bench}"
+                )
+        except Exception as e:
+            logger.info(f"💓 GammaBlast heartbeat error: {e}")
+
         # ── 1. Capture benchmark exactly at 9:20 AM ───────────────────
         if (now.hour == self.benchmark_hour and now.minute == self.benchmark_min
                 and self.benchmark_ce is None):
@@ -162,6 +185,7 @@ class NiftyGammaSpikeStrategy:
         else:
             if not is_hard_exit:
                 logger.info(f"⏳ Waiting for entry window (9:30–11:30 AM)... [{now.strftime('%H:%M')}]")
+
 
     # ─────────────────────────────────────────────────────────────────────
     # Entry: SELL the spiked leg
