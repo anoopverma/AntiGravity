@@ -152,7 +152,16 @@
             </div>
 
             <div class="card">
-                <div class="card-title">System Logs</div>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+                    <div class="card-title" style="margin:0;">System Logs</div>
+                    <button onclick="clearLogs()" style="padding:0.3rem 0.85rem; font-size:0.75rem; font-weight:600;
+                           background: rgba(100,100,120,0.2); border:1px solid #555;
+                           color:#aaa; border-radius:6px; cursor:pointer; transition:all 0.2s;
+                           " onmouseover="this.style.background='rgba(220,38,38,0.2)';this.style.borderColor='#dc2626';this.style.color='#f87171';"
+                             onmouseout="this.style.background='rgba(100,100,120,0.2)';this.style.borderColor='#555';this.style.color='#aaa';">
+                        🗑 Clear
+                    </button>
+                </div>
                 <div class="log-container" id="logs">
                     <div class="log-entry"><span class="log-time">[System]</span> UI initialized.</div>
                 </div>
@@ -332,6 +341,17 @@
                 const time = new Date().toLocaleTimeString();
                 logs.innerHTML += `<div class="log-entry"><span class="log-time">[${time}]</span> ${msg}</div>`;
                 logs.scrollTop = logs.scrollHeight;
+            }
+
+            function clearLogs() {
+                // Clear UI log panel
+                const logs = document.getElementById('logs');
+                logs.innerHTML = '<div class="log-entry"><span class="log-time">[System]</span> Logs cleared.</div>';
+                // Also clear the server log file
+                fetch('/api/clear_logs', { method: 'POST' })
+                    .then(r => r.json())
+                    .then(d => console.log('Server logs cleared:', d.message))
+                    .catch(e => console.warn('Could not clear server logs:', e));
             }
 
             function confirmCloseAll() {

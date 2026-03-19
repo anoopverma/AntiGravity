@@ -190,6 +190,16 @@ def get_system_logs():
     except Exception as e:
         return jsonify({"status": "error", "message": "No logs found"})
 
+@app.route('/api/clear_logs', methods=['POST'])
+@login_required
+def clear_logs():
+    try:
+        open('server_log.txt', 'w').close()   # truncate the file
+        logger.info("🗑 System logs cleared by user.")
+        return jsonify({"status": "success", "message": "Logs cleared"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
 @app.route('/api/expiries', methods=['GET'])
 @login_required
 def get_expiries():
