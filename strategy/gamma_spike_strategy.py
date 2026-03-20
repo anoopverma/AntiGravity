@@ -31,6 +31,7 @@ class NiftyGammaSpikeStrategy:
         self.dhan = dhanhq(context)
 
         self.target_expiry   = None
+        self.index_id        = 13          # Default to Nifty 50
         self.lot_size        = 65          # 20 lots × 65 qty
         self.running         = False
         self.paused          = False
@@ -44,7 +45,7 @@ class NiftyGammaSpikeStrategy:
         self.sl_pct          = 0.40          # buy back when rises 40% → loss
         self.benchmark_hour  = 9
         self.benchmark_min   = 20
-        self.entry_start     = (9,  30)      # start scanning from 9:30 AM
+        self.entry_start     = (9,  30)      # start scanning from 10 mins after benchmark
         self.entry_cutoff    = (11, 30)      # no new sells after 11:30 AM
         self.hard_exit       = (11, 30)      # force close at 11:30 AM
         # ────────────────────────────────────────────────────────────────
@@ -75,20 +76,36 @@ class NiftyGammaSpikeStrategy:
 
             # Option chain
             if self.target_expiry:
-                oc_resp = self.dhan.option_chain(13, self.dhan.INDEX, self.target_expiry)
+                idx_name = getattr(self.dhan, 'INDEX', 'IDX_I' if self.index_id in [13, 25, 51] else 'NSE')
+                logger.info(f"Calling Dhan option_chain: {self.index_id}, {idx_name}, {self.target_expiry}")
+                oc_resp = self.dhan.option_chain(int(self.index_id), idx_name, self.target_expiry)
+                logger.info(f"Dhan option_chain returned: status={oc_resp.get('status') if oc_resp else 'None'}")
                 if oc_resp.get("status") == "success":
-                    data = oc_resp["data"]
-                    spot = data.get("last_price", 0)
-                    if spot > 0 and "oc" in data:
-                        strikes = [float(s) for s in data["oc"].keys()]
-                        atm_strike = min(strikes, key=lambda x: abs(x - spot))
-                        sd = data["oc"][f"{atm_strike:.6f}"]
-                        ce_p   = sd["ce"].get("last_price", 0)
-                        pe_p   = sd["pe"].get("last_price", 0)
-                        ce_vol = sd["ce"].get("volume", 1)
-                        pe_vol = sd["pe"].get("volume", 1)
-                        ce_id  = sd["ce"].get("security_id")
-                        pe_id  = sd["pe"].get("security_id")
+                    # Handle double-nesting where 'data' contains another 'data' key
+                    raw_data = oc_resp.get("data", {})
+                    if isinstance(raw_data, dict) and "data" in raw_data and isinstance(raw_data["data"], dict):
+                        data = raw_data["data"]
+                    else:
+                        data = raw_data
+
+                    if isinstance(data, dict):
+                        spot = data.get("last_price", 0)
+                        strikes = [float(s) for s in data.get("oc", {}).keys()]
+                        if strikes and spot > 0:
+                            atm_strike = min(strikes, key=lambda x: abs(x - spot))
+                            chain = data["oc"][f"{atm_strike:.6f}"]
+                            ce_p = chain.get("ce", {}).get("last_price", 0)
+                            pe_p = chain.get("pe", {}).get("last_price", 0)
+                            ce_id = chain.get("ce", {}).get("security_id", 0)
+                            pe_id = chain.get("pe", {}).get("security_id", 0)
+                            ce_vol = chain.get("ce", {}).get("volume", 0)
+                            pe_vol = chain.get("pe", {}).get("volume", 0)
+                        else:
+                            logger.warning(f"Option Chain Success but Data Incomplete: spot={spot}, strikes_len={len(strikes)}")
+                    else:
+                        logger.warning(f"Option Chain Success but Data unrecognized type: {type(data)}")
+                else:
+                    logger.warning(f"Option Chain FAILED: status={oc_resp.get('status')}, remarks={oc_resp.get('remarks')}")
         except Exception as e:
             logger.error(f"get_live_data error: {e}")
 
@@ -98,20 +115,24 @@ class NiftyGammaSpikeStrategy:
     # Benchmark
     # ─────────────────────────────────────────────────────────────────────
 
-    def capture_benchmark(self):
+    def capture_benchmark(self, spot=0, ce_p=0, pe_p=0):
         """Capture individual CE & PE prices at 9:20 AM as baseline."""
         try:
-            spot, ce_p, pe_p, _, _, _, _, _ = self.get_live_data()
+            if spot == 0 or ce_p == 0 or pe_p == 0:
+                spot, ce_p, pe_p, _, _, _, _, _ = self.get_live_data()
+
             if spot > 0 and ce_p > 0 and pe_p > 0:
                 self.benchmark_spot = spot
                 self.benchmark_ce   = ce_p
                 self.benchmark_pe   = pe_p
                 logger.info(
-                    f"📍 Benchmark Set (9:20 AM) | Spot: {spot} "
+                    f"📍 Benchmark Set ({self.benchmark_hour:02d}:{self.benchmark_min:02d}) | Spot: {spot:.1f} "
                     f"| CE: {ce_p:.2f} | PE: {pe_p:.2f}"
                 )
             else:
-                logger.warning(f"Benchmark capture failed: spot={spot} ce={ce_p} pe={pe_p}")
+                logger.warning(f"Benchmark capture failed: spot={spot:.1f} ce={ce_p:.2f} pe={pe_p:.2f}")
+        except Exception as e:
+            logger.error(f"capture_benchmark error: {e}")
         except Exception as e:
             logger.error(f"capture_benchmark error: {e}")
 
@@ -124,77 +145,62 @@ class NiftyGammaSpikeStrategy:
         self.target_expiry = expiry_date
         now = datetime.datetime.now()
 
-        # ── 0. Heartbeat — log live state every tick so dashboard shows activity ─
+        # 0. Data Fetching (Unified for tick)
+        spot, ce_p, pe_p, ce_vol, pe_vol, vix, ce_id, pe_id = self.get_live_data()
+
+        # ── 1. Heartbeat — log live state every tick so dashboard shows activity ──
         try:
-            spot, ce_p, pe_p, _, _, vix, _, _ = self.get_live_data()
             mode  = "Paper" if self.paper_trade else "LIVE"
-            bench = f"CE={self.benchmark_ce:.1f} PE={self.benchmark_pe:.1f}" if self.benchmark_ce else "awaiting bench"
-            if self.benchmark_ce and spot > 0:
-                ce_spk = (ce_p / self.benchmark_ce - 1) * 100 if self.benchmark_ce else 0
-                pe_spk = (pe_p / self.benchmark_pe - 1) * 100 if self.benchmark_pe else 0
-                logger.info(
-                    f"💓 GammaBlast [{mode}] | {now.strftime('%H:%M')} "
-                    f"| Spot={spot:.0f} | VIX={vix:.1f} "
-                    f"| CE={ce_p:.1f} ({ce_spk:+.1f}%) "
-                    f"| PE={pe_p:.1f} ({pe_spk:+.1f}%) "
-                    f"| Trigger≥20% | Pos={'OPEN' if self.in_position else 'none'}"
-                )
-            else:
-                logger.info(
-                    f"💓 GammaBlast [{mode}] | {now.strftime('%H:%M')} "
-                    f"| Spot={spot:.0f} | VIX={vix:.1f} | {bench}"
-                )
+            bench = "benchmark" if self.benchmark_ce else "awaiting benchmark"
+            logger.info(
+                f"💓 GammaBlast [{mode}] | {now.strftime('%H:%M')} "
+                f"| Expiry={self.target_expiry} | Spot={spot:.0f} | VIX={vix:.1f} | {bench}"
+            )
         except Exception as e:
             logger.info(f"💓 GammaBlast heartbeat error: {e}")
 
-        # ── 1. Capture benchmark exactly at 9:20 AM ───────────────────
-        if (now.hour == self.benchmark_hour and now.minute == self.benchmark_min
-                and self.benchmark_ce is None):
-            self.capture_benchmark()
-
-        # Auto-capture if we started late
+        # ── 2. Capture benchmark exactly at benchmark time ───────────
         is_past_benchmark = (now.hour > self.benchmark_hour or
                              (now.hour == self.benchmark_hour and now.minute >= self.benchmark_min))
+
         if is_past_benchmark and self.benchmark_ce is None:
-            self.capture_benchmark()
+            self.capture_benchmark(spot, ce_p, pe_p)
 
         if not self.benchmark_ce:
-            logger.info("⏳ Waiting for 9:20 AM benchmark...")
+            logger.info(f"⏳ Waiting for {self.benchmark_hour:02d}:{self.benchmark_min:02d} benchmark...")
             return
 
         # ── 2. Time gates ──────────────────────────────────────────────
-        sh, sm = self.entry_start
-        ch, cm = self.entry_cutoff
-        hh, hm = self.hard_exit
-
-        in_entry_window = (
-            (now.hour > sh or (now.hour == sh and now.minute >= sm)) and
-            (now.hour < ch or (now.hour == ch and now.minute <= cm))
-        )
-        is_hard_exit = now.hour > hh or (now.hour == hh and now.minute >= hm)
+        # Entry window: after benchmark baseline but before hard exit
+        ch, cm = self.hard_exit
+        
+        past_benchmark = (now.hour > self.benchmark_hour or 
+                          (now.hour == self.benchmark_hour and now.minute > self.benchmark_min))
+        before_hard_exit = (now.hour < ch or (now.hour == ch and now.minute < cm))
+        
+        in_entry_window = past_benchmark and before_hard_exit
 
         # ── 3. Manage open position ────────────────────────────────────
         if self.in_position:
-            if is_hard_exit:
-                logger.warning("🕒 11:30 AM — Hard exit triggered.")
-                self._close_with_market("Time Exit (11:30)")
+            if not before_hard_exit:
+                logger.warning(f"🕒 {ch:02d}:{cm:02d} — Hard exit triggered.")
+                self._close_with_market("Time Exit (Hard)")
             else:
                 self.manage_position(force_exit=False)
         elif in_entry_window:
-            self.check_entry()
+            self.check_entry(spot, ce_p, pe_p, vix, ce_id, pe_id)
         else:
-            if not is_hard_exit:
-                logger.info(f"⏳ Waiting for entry window (9:30–11:30 AM)... [{now.strftime('%H:%M')}]")
+            if before_hard_exit:
+                logger.info(f"⏳ Waiting for entry window (after {self.benchmark_hour:02d}:{self.benchmark_min:02d})...")
 
 
     # ─────────────────────────────────────────────────────────────────────
     # Entry: SELL the spiked leg
     # ─────────────────────────────────────────────────────────────────────
 
-    def check_entry(self):
-        """Sell whichever leg has spiked >= 20% from 9:20 AM benchmark."""
+    def check_entry(self, spot, ce_p, pe_p, vix, ce_id, pe_id):
+        """Sell whichever leg has spiked >= 20% from baseline benchmark."""
         try:
-            spot, ce_p, pe_p, _, _, vix, ce_id, pe_id = self.get_live_data()
             if spot == 0:
                 logger.warning("Entry skipped: spot = 0")
                 return
@@ -203,7 +209,7 @@ class NiftyGammaSpikeStrategy:
             pe_exp = pe_p / self.benchmark_pe if self.benchmark_pe else 0
 
             logger.info(
-                f"Entry Check | CE: {ce_p:.2f} (+{(ce_exp-1)*100:.1f}%) "
+                f"Entry Check [{self.target_expiry}] | CE: {ce_p:.2f} (+{(ce_exp-1)*100:.1f}%) "
                 f"PE: {pe_p:.2f} (+{(pe_exp-1)*100:.1f}%) | VIX: {vix:.1f}"
             )
 

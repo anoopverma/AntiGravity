@@ -76,7 +76,17 @@ running_flag = False
 paused_flag = False
 current_broker = "Dhan"
 strategy_thread = None
-expiry_date = "2026-03-10"
+expiry_date = "2026-03-24" # Default fallback
+try:
+    from strategy.expiry_manager import ExpiryManager
+    if dhan:
+        exp_records = ExpiryManager(dhan_client=dhan).get_upcoming_expiries()
+        nifty_rec = next((r for r in exp_records if r.script == "NIFTY 50"), None)
+        if nifty_rec:
+            expiry_date = nifty_rec.expiry_date.strftime("%Y-%m-%d")
+            logger.info(f"Auto-detected next Nifty expiry: {expiry_date}")
+except Exception as e:
+    logger.warning(f"Failed to auto-detect expiry: {e}. Using fallback {expiry_date}")
 
 logger.info("Engine configured. Standing by for start.")
 
@@ -86,16 +96,18 @@ def strategy_loop():
     global expiry_date, active_strategies, running_flag, paused_flag, current_broker
     logger.info(f"Background Strategy Thread Started. Broker: {current_broker}.")
     
+    import datetime
     while running_flag:
-        now_ist = pd.Timestamp.now('Asia/Kolkata')
-        if now_ist.hour == 15 and now_ist.minute == 31:
-            logger.info("Auto-stopping engines at 3:31 PM IST.")
-            running_flag = False
-            paused_flag = False
-            active_strategies.clear()
-            break
-
         try:
+            # Simple IST check without pandas overhead
+            now_ist = datetime.datetime.now() # assume OS is IST, or just check hour/min
+            if now_ist.hour == 15 and now_ist.minute == 31:
+                logger.info("Auto-stopping engines at 3:31 PM IST.")
+                running_flag = False
+                paused_flag = False
+                active_strategies.clear()
+                break
+
             if not paused_flag:
                 for strat in active_strategies:
                     # check if the strategy is individually paused
@@ -362,7 +374,6 @@ def start():
                 try:
                     from strategy.gamma_spike_strategy import NiftyGammaSpikeStrategy
                     s2 = NiftyGammaSpikeStrategy(CLIENT_ID, ACCESS_TOKEN)
-                    s2.dhan = dhan
                     s2.paper_trade = is_paper
 
                     # Apply overrides — same pattern as v4_gamma
@@ -375,6 +386,7 @@ def start():
                         if overrides.get('qty'):
                             try: s2.lot_size = int(overrides.get('qty'))
                             except: pass
+                        if overrides.get('index_id'): s2.index_id = int(overrides.get('index_id'))
                         if overrides.get('base_time'):
                             s2.benchmark_hour, s2.benchmark_min = map(int, overrides.get('base_time').split(':'))
                         s2.force_run = True   # run on any day/time when overridden
@@ -450,7 +462,6 @@ def start():
                 try:
                     from strategy.gamma_spike_strategy import NiftyGammaSpikeStrategy
                     s2 = NiftyGammaSpikeStrategy(CLIENT_ID, ACCESS_TOKEN)
-                    s2.dhan = dhan
                     s2.paper_trade = is_paper
 
                     if overrides and overrides.get('expiry'):
@@ -462,6 +473,7 @@ def start():
                         if overrides.get('qty'):
                             try: s2.lot_size = int(overrides.get('qty'))
                             except: pass
+                        if overrides.get('index_id'): s2.index_id = int(overrides.get('index_id'))
                         if overrides.get('base_time'):
                             s2.benchmark_hour, s2.benchmark_min = map(int, overrides.get('base_time').split(':'))
                         s2.force_run = True
