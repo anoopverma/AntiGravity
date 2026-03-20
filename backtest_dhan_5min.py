@@ -35,7 +35,9 @@ class NiftyTuesdayDhanBacktester:
         if not self.client_id or not self.access_token:
             raise ValueError("Dhan API credentials (ID/Key or Token/Secret) not found in environment")
             
-        self.dhan = dhanhq(str(self.client_id), str(self.access_token))
+        from dhanhq.dhan_context import DhanContext
+        context = DhanContext(str(self.client_id), str(self.access_token))
+        self.dhan = dhanhq(context)
         
         # Strategy Parameters
         self.initial_capital = 100000  # ₹1,00,000

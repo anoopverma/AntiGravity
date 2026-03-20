@@ -17,7 +17,9 @@ ACCESS_TOKEN = os.getenv("DHAN_ACCESS_TOKEN")
 
 class NiftyV4TrailingSLStrategy:
     def __init__(self, target_expiry):
-        self.dhan = dhanhq(str(CLIENT_ID), str(ACCESS_TOKEN))
+        from dhanhq.dhan_context import DhanContext
+        context = DhanContext(str(CLIENT_ID), str(ACCESS_TOKEN))
+        self.dhan = dhanhq(context)
         self.target_expiry = target_expiry
         self.lot_size = 65
         self.running = False
