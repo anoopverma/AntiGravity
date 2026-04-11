@@ -1,11 +1,10 @@
 services:
   - type: web
     name: antigravity-dashboard
-    runtime: python
+    runtime: docker
+    dockerfilePath: ./Dockerfile
     plan: free
     healthCheckPath: /health
-    buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn --config gunicorn.conf.py app:app
     envVars:
       - key: DHAN_CLIENT_ID
         sync: false
