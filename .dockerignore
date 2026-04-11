@@ -1,0 +1,14 @@
+.git
+.gitignore
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.log
+server_log.txt
+.vscode
+.sfdx
+node_modules
+.DS_Store
+memories

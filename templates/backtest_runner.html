@@ -72,17 +72,17 @@
 
                 <div class="form-group"
                     style="display:flex; flex-direction:row; gap:0.5rem; justify-content:flex-end; width:100%;">
-                    <button class="btn-run" id="run-btn" onclick="testDhan()" style="white-space:nowrap; flex:1;">
+                    <button type="button" class="btn-run" id="run-btn" onclick="testDhan(event)" style="white-space:nowrap; flex:1;">
                         ▶ DHAN BACK TEST
                     </button>
-                    <button class="btn-run"
+                    <button type="button" class="btn-run"
                         style="background: linear-gradient(135deg, #e3b341, #da3633); white-space:nowrap; flex:1;"
-                        id="test-strat-btn" onclick="showStatistics()">
+                        id="test-strat-btn" onclick="showStatistics(event)">
                         📊 SHOW STATISTICS
                     </button>
-                    <button class="btn-run"
+                    <button type="button" class="btn-run"
                         style="background: linear-gradient(135deg, #e74c3c, #c0392b); white-space:nowrap; flex:1;"
-                        id="del-db-btn" onclick="deleteDbData()">
+                        id="del-db-btn" onclick="deleteDbData(event)">
                         🗑️ DELETE DATA
                     </button>
                 </div>
@@ -214,11 +214,23 @@
 
         // Global store for all fetched rows
         let _allData = [];
+        let _isBacktestRequestInFlight = false;
 
         async function fetchBacktests() {
             try {
                 const res = await fetch('/api/backtests');
                 const data = await res.json();
+
+                if (!res.ok || data.status !== 'success') {
+                    const msg = data?.message || `HTTP ${res.status}`;
+                    log(`❌ Salesforce fetch failed: ${msg}`, 'log-error');
+                    _allData = [];
+                    document.getElementById('backtest-tbody').innerHTML =
+                        `<tr><td colspan="18" class="empty-state">Salesforce fetch failed: ${msg}</td></tr>`;
+                    document.getElementById('backtest-tfoot').innerHTML = '';
+                    document.getElementById('equity-card').style.display = 'none';
+                    return;
+                }
 
                 const select = document.getElementById('strategy-select');
                 const currentVal = select.value;
@@ -301,6 +313,11 @@
 
             } catch (err) {
                 console.error("Backtest fetch failed", err);
+                log(`❌ Network/parse error while fetching Salesforce data: ${err.message}`, 'log-error');
+                document.getElementById('backtest-tbody').innerHTML =
+                    `<tr><td colspan="18" class="empty-state">Error loading Salesforce data: ${err.message}</td></tr>`;
+                document.getElementById('backtest-tfoot').innerHTML = '';
+                document.getElementById('equity-card').style.display = 'none';
             }
         }
 
@@ -405,7 +422,18 @@
             // Table will update on next explicit refresh — no auto-fetch here
         }
 
-        async function testDhan() {
+        async function testDhan(event) {
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+
+            if (_isBacktestRequestInFlight) {
+                log('⏳ Backtest already running. Please wait for it to finish.', 'log-warn');
+                return;
+            }
+
+            _isBacktestRequestInFlight = true;
             const btn = document.getElementById('run-btn');
             btn.disabled = true;
             btn.innerHTML = `<span class="spinner" style="margin-right:8px; display:inline-block; border: 2px solid white; border-top: 2px solid transparent; border-radius: 50%; width: 14px; height: 14px; animation: spin 1s linear infinite;"></span> Running...`;
@@ -481,13 +509,19 @@
             } catch (e) {
                 setStatus('error');
                 log(`❌ Network Error: ${e.message}`, 'log-error');
+            } finally {
+                _isBacktestRequestInFlight = false;
+                btn.disabled = false;
+                btn.innerHTML = '▶ DHAN BACK TEST';
             }
-
-            btn.disabled = false;
-            btn.innerHTML = '▶ DHAN BACK TEST';
         }
 
-        async function deleteDbData() {
+        async function deleteDbData(event) {
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+
             const strategy = document.getElementById('strategy-select').value;
             const runMode = document.getElementById('run-mode-select').value;
             const runDate = document.getElementById('run-date-select').value;
@@ -548,7 +582,17 @@
             btn.innerHTML = originalHtml;
         }
 
-        function showStatistics() {
+        function showStatistics(event) {
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+
+            if (_isBacktestRequestInFlight) {
+                log('⏳ Backtest is currently running. Statistics will refresh after it finishes.', 'log-warn');
+                return;
+            }
+
             log('📊 Fetching statistics from Salesforce...', 'log-info');
             fetchBacktests();
         }

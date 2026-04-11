@@ -630,13 +630,25 @@ def get_backtests():
     try:
         from simple_salesforce import Salesforce
 
-        sf = Salesforce(
-            username=os.getenv("SF_USERNAME"),
-            password=os.getenv("SF_PASSWORD"),
-            security_token=os.getenv("SF_SECURITY_TOKEN", ""),
-            domain=os.getenv("SF_DOMAIN", "login"),
-            version=os.getenv("SF_API_VERSION", "59.0"),
-        )
+        sf_instance = (os.getenv("SF_INSTANCE") or "").strip()
+        if sf_instance.startswith("https://"):
+            sf_instance = sf_instance[len("https://"):]
+        elif sf_instance.startswith("http://"):
+            sf_instance = sf_instance[len("http://"):]
+        sf_instance = sf_instance.rstrip("/")
+
+        sf_kwargs = {
+            "username": os.getenv("SF_USERNAME"),
+            "password": os.getenv("SF_PASSWORD"),
+            "security_token": os.getenv("SF_SECURITY_TOKEN", ""),
+            "version": os.getenv("SF_API_VERSION", "59.0"),
+        }
+        if sf_instance:
+            sf_kwargs["instance"] = sf_instance
+        else:
+            sf_kwargs["domain"] = os.getenv("SF_DOMAIN", "login")
+
+        sf = Salesforce(**sf_kwargs)
 
         query = """
             SELECT Run_Date__c,
@@ -697,7 +709,11 @@ def get_backtests():
 
         return jsonify({"status": "success", "data": rows})
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
+        logger.error("Failed loading backtest stats from Salesforce: %s", e)
+        return jsonify({
+            "status": "error",
+            "message": f"Salesforce fetch failed: {str(e)}"
+        }), 500
 
 
 @app.route('/api/run-backtest', methods=['POST'])
