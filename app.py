@@ -3,8 +3,9 @@ import threading
 import time
 import logging
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timezone
 from functools import wraps
+from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 from flask import (
     Flask, render_template, jsonify, request,
@@ -21,6 +22,8 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+
+IST_TZ = ZoneInfo("Asia/Kolkata")
 
 load_dotenv()
 
@@ -676,13 +679,31 @@ def get_backtests():
 
         results = sf.query_all(query)
 
-        def _fmt_time(v):
+        def _fmt_time(v, trade_date=None):
             if not v:
                 return "-"
+
             s = str(v)
+
+            def _to_ist(dt_obj):
+                if dt_obj.tzinfo is None:
+                    dt_obj = dt_obj.replace(tzinfo=timezone.utc)
+                return dt_obj.astimezone(IST_TZ).strftime("%H:%M:%S")
+
             if "T" in s:
-                return s.split("T", 1)[1][:8]
-            return s
+                try:
+                    return _to_ist(datetime.fromisoformat(s.replace("Z", "+00:00")))
+                except ValueError:
+                    return s.split("T", 1)[1][:8]
+
+            if s.endswith("Z") or "+" in s[1:] or "-" in s[1:]:
+                base_date = trade_date or datetime.utcnow().date().isoformat()
+                try:
+                    return _to_ist(datetime.fromisoformat(f"{base_date}T{s.replace('Z', '+00:00')}"))
+                except ValueError:
+                    pass
+
+            return s[:8]
 
         rows = []
         for rec in results.get("records", []):
@@ -695,8 +716,8 @@ def get_backtests():
                 "Option_Type": rec.get("Option_Type__c"),
                 "Action": rec.get("Action__c"),
                 "Qty": rec.get("Qty__c"),
-                "Entry_Time": _fmt_time(rec.get("Entry_Time__c")),
-                "Exit_Time": _fmt_time(rec.get("Exit_Time__c")),
+                "Entry_Time": _fmt_time(rec.get("Entry_Time__c"), rec.get("Trade_Date__c")),
+                "Exit_Time": _fmt_time(rec.get("Exit_Time__c"), rec.get("Trade_Date__c")),
                 "Buy_Price": rec.get("Buy_Price__c"),
                 "Peak_Price": rec.get("Peak_Price__c"),
                 "Sell_Price": rec.get("Sell_Price__c"),

@@ -200,7 +200,7 @@
 
         function log(msg, cls = 'log-info') {
             const box = document.getElementById('log-box');
-            const ts = new Date().toLocaleTimeString('en-IN');
+            const ts = new Date().toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' });
             box.innerHTML += `<span class="${cls}">[${ts}] ${msg}\n</span>`;
             box.scrollTop = box.scrollHeight;
         }
