@@ -6,7 +6,6 @@ import pandas as pd
 from datetime import datetime
 from functools import wraps
 from dotenv import load_dotenv
-from sqlalchemy import create_engine
 from flask import (
     Flask, render_template, jsonify, request,
     make_response, redirect, url_for, session
@@ -216,42 +215,44 @@ def clear_logs():
 @login_required
 def get_expiries():
     from strategy.expiry_manager import ExpiryManager
-    from strategy.expiry_repository import PostgresExpiryRepository
     try:
         records = ExpiryManager(dhan_client=dhan).get_upcoming_expiries()
         data    = [r.to_dict() for r in records]
-
-        # Persist to DB if Postgres is configured
-        uri = os.getenv("POSTGRES_URI", "")
-        if uri:
-            try:
-                repo = PostgresExpiryRepository(create_engine(uri))
-                db_records = [
-                    {"script_name": r.script, "expiry_date": r.expiry_date,
-                     "day_label": r.day_label, "source": r.source}
-                    for r in records
-                ]
-                repo.upsert(db_records)
-            except Exception as db_err:
-                logger.warning(f"Expiry DB save failed (non-fatal): {db_err}")
-
         return jsonify({"status": "success", "data": data})
     except Exception as e:
         logger.error(f"Failed to calculate expiries: {e}")
         return jsonify({"status": "error", "message": str(e)})
 
 
+def _build_expiry_calendar(days_ahead=120):
+    """Build a forward expiry calendar without database persistence."""
+    import datetime as dt
+    from strategy.expiry_manager import ExpiryManager
+
+    manager = ExpiryManager(dhan_client=dhan)
+    today = dt.date.today()
+    seen = set()
+    rows = []
+
+    for offset in range(days_ahead + 1):
+        ref_date = today + dt.timedelta(days=offset)
+        for rec in manager.get_upcoming_expiries(reference=ref_date):
+            key = (rec.script, rec.expiry_date.isoformat())
+            if key in seen:
+                continue
+            seen.add(key)
+            rows.append(rec.to_dict())
+
+    rows.sort(key=lambda r: (r.get("expiry_iso", ""), r.get("script", "")))
+    return rows
+
+
 @app.route('/api/expiries/history', methods=['GET'])
 @login_required
 def get_expiries_history():
-    """Read last-saved expiry records from the database."""
-    from strategy.expiry_repository import PostgresExpiryRepository
-    uri = os.getenv("POSTGRES_URI", "")
-    if not uri:
-        return jsonify({"status": "error", "message": "POSTGRES_URI not configured"}), 503
+    """Backward-compatible endpoint returning generated expiry calendar."""
     try:
-        repo = PostgresExpiryRepository(create_engine(uri))
-        return jsonify({"status": "success", "data": repo.fetch_latest()})
+        return jsonify({"status": "success", "data": _build_expiry_calendar()})
     except Exception as e:
         logger.error(f"Failed to read expiry history: {e}")
         return jsonify({"status": "error", "message": str(e)})
@@ -260,28 +261,9 @@ def get_expiries_history():
 @app.route('/api/expiries/all', methods=['GET'])
 @login_required
 def get_expiries_all():
-    """Read all upcoming expiry records from the database for the next few months."""
-    uri = os.getenv("POSTGRES_URI", "")
-    if not uri:
-        return jsonify({"status": "error", "message": "POSTGRES_URI not configured"}), 503
+    """Return all upcoming expiry records for the next few months."""
     try:
-        from sqlalchemy import text
-        engine = create_engine(uri)
-        with engine.connect() as conn:
-            # Fetch all expiries from today onwards
-            query = 'SELECT * FROM script_expiries WHERE expiry_date >= CURRENT_DATE ORDER BY expiry_date ASC, script_name ASC'
-            rows = conn.execute(text(query)).mappings().all()
-            
-            data = [
-                {
-                    "script": row["script_name"],
-                    "expiry": row["expiry_date"].strftime("%d %b %Y"),
-                    "expiry_iso": row["expiry_date"].isoformat(),
-                    "day_label": row["day_label"],
-                    "source": row["source"]
-                }
-                for row in rows
-            ]
+        data = _build_expiry_calendar()
         return jsonify({"status": "success", "data": data})
     except Exception as e:
         logger.error(f"Failed to read expiry list: {e}")
@@ -645,16 +627,75 @@ def get_positions():
 @app.route('/api/backtests', methods=['GET'])
 @login_required
 def get_backtests():
-    uri = os.getenv("POSTGRES_URI", "")
-    if not uri:
-        return jsonify({"status": "error", "message": "POSTGRES_URI not configured"}), 503
     try:
-        engine = create_engine(uri)
-        df = pd.read_sql(
-            'SELECT * FROM historical_backtests ORDER BY "Date" DESC, "Entry_Time" DESC',
-            con=engine,
+        from simple_salesforce import Salesforce
+
+        sf = Salesforce(
+            username=os.getenv("SF_USERNAME"),
+            password=os.getenv("SF_PASSWORD"),
+            security_token=os.getenv("SF_SECURITY_TOKEN", ""),
+            domain=os.getenv("SF_DOMAIN", "login"),
+            version=os.getenv("SF_API_VERSION", "59.0"),
         )
-        return jsonify({"status": "success", "data": df.to_dict(orient='records')})
+
+        query = """
+            SELECT Run_Date__c,
+                   Run_Mode__c,
+                   Strategy_Name__c,
+                   Trade_Date__c,
+                   Strike__c,
+                   Option_Type__c,
+                   Action__c,
+                   Qty__c,
+                   Entry_Time__c,
+                   Exit_Time__c,
+                   Buy_Price__c,
+                   Peak_Price__c,
+                   Sell_Price__c,
+                   Total_PNL__c,
+                   Total_Return_Percentage__c,
+                   Capital_ROI_Pct__c,
+                   Reason__c,
+                   Parameters__c
+            FROM historical_backtests__c
+            ORDER BY Trade_Date__c DESC, Entry_Time__c DESC
+            LIMIT 5000
+        """
+
+        results = sf.query_all(query)
+
+        def _fmt_time(v):
+            if not v:
+                return "-"
+            s = str(v)
+            if "T" in s:
+                return s.split("T", 1)[1][:8]
+            return s
+
+        rows = []
+        for rec in results.get("records", []):
+            rows.append({
+                "Run_Date": rec.get("Run_Date__c"),
+                "Run_Mode": rec.get("Run_Mode__c") or "backtest",
+                "Strategy_Name": rec.get("Strategy_Name__c"),
+                "Date": rec.get("Trade_Date__c"),
+                "Strike": rec.get("Strike__c"),
+                "Option_Type": rec.get("Option_Type__c"),
+                "Action": rec.get("Action__c"),
+                "Qty": rec.get("Qty__c"),
+                "Entry_Time": _fmt_time(rec.get("Entry_Time__c")),
+                "Exit_Time": _fmt_time(rec.get("Exit_Time__c")),
+                "Buy_Price": rec.get("Buy_Price__c"),
+                "Peak_Price": rec.get("Peak_Price__c"),
+                "Sell_Price": rec.get("Sell_Price__c"),
+                "PNL": rec.get("Total_PNL__c"),
+                "ROI%": rec.get("Total_Return_Percentage__c"),
+                "Capital_ROI%": rec.get("Capital_ROI_Pct__c"),
+                "Reason": rec.get("Reason__c"),
+                "Parameters": rec.get("Parameters__c"),
+            })
+
+        return jsonify({"status": "success", "data": rows})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
@@ -662,115 +703,419 @@ def get_backtests():
 @app.route('/api/run-backtest', methods=['POST'])
 @login_required
 def run_backtest():
-    """Acts as a Quick Dhan API Tester for the UI."""
-    data = request.json or {}
-    strategy = data.get('strategy', 'Unknown')
+    """Execute selected strategy backtest and sync to Salesforce.
     
-    if not dhan:
-        return jsonify({"status": "error", "message": "Dhan API not connected. Please connect via settings/env."}), 400
+    Request JSON:
+    {
+        "strategy": "gamma_blast" or "v4_gamma",
+        "capital": 500000,
+        "start_date": "2025-01-01",
+        "end_date": "2025-12-31"
+    }
+    """
+    data = request.json or {}
+    strategy = data.get('strategy', 'gamma_blast')
+    capital = data.get('capital', 500000)
+    start_date = data.get('start_date')
+    end_date = data.get('end_date')
+    
+    if not strategy or strategy not in ['gamma_blast', 'v4_gamma']:
+        return jsonify({
+            "status": "error",
+            "message": f"Invalid strategy: {strategy}. Must be 'gamma_blast' or 'v4_gamma'"
+        }), 400
     
     try:
-        # Just to verify connection
-        res = dhan.get_fund_limits()
-        if res.get("status") == "success":
+        from backtest_orchestrator import BacktestOrchestrator
+        
+        logger.info(f"Starting backtest: strategy={strategy}, capital={capital}")
+        
+        orchestrator = BacktestOrchestrator()
+        
+        # Build kwargs for strategy
+        kwargs = {'capital': capital}
+        if start_date:
+            kwargs['start_date'] = start_date
+        if end_date:
+            kwargs['end_date'] = end_date
+        
+        # Run and sync
+        result = orchestrator.run_and_sync(strategy, **kwargs)
+        
+        if "error" in result:
             return jsonify({
-                "status": "success",
-                "message": "Dhan API is actively connected and responding successfully!",
-                "total_trades": 0,
-                "wins": 0,
-                "losses": 0,
-                "net_pnl": 0,
-                "capital": data.get('capital', 500000)
-            })
-        else:
-            return jsonify({"status": "error", "message": f"Dhan API Verification Failed: {res}"})
+                "status": "error",
+                "message": result.get("error", "Unknown error"),
+                "strategy": strategy
+            }), 400
+        
+        return jsonify({
+            "status": "success",
+            "strategy": strategy,
+            "execution": result.get("execution"),
+            "sync": result.get("sync"),
+            "overall_status": result.get("overall_status", "unknown")
+        })
+        
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+        logger.error(f"Backtest execution failed: {e}", exc_info=True)
+        return jsonify({
+            "status": "error",
+            "message": str(e),
+            "strategy": strategy
+        }), 500
 
 
 
 @app.route('/api/delete-backtest', methods=['POST'])
 @login_required
 def delete_backtest():
-    """Delete database records for a specified strategy and date range."""
+    """Delete Salesforce backtest records for a specified filter set."""
     data = request.json or {}
     strategy = data.get('strategy', 'ALL')
     start_date = data.get('start_date')
     end_date = data.get('end_date')
-
-    uri = os.getenv("POSTGRES_URI", "")
-    if not uri:
-        return jsonify({"status": "error", "message": "POSTGRES_URI not configured"}), 503
+    run_mode = data.get('run_mode', 'ALL')
+    run_date = data.get('run_date', 'ALL')
 
     try:
-        from sqlalchemy import text
-        engine = create_engine(uri)
-        with engine.connect() as conn:
-            query = 'DELETE FROM historical_backtests WHERE 1=1'
-            params = {}
+        from simple_salesforce import Salesforce
 
-            if strategy != 'ALL':
-                query += ' AND "Strategy_Name" = :strategy'
-                params['strategy'] = strategy
-            
-            if start_date:
-                query += ' AND "Date" >= :start_date'
-                params['start_date'] = start_date
+        sf = Salesforce(
+            username=os.getenv("SF_USERNAME"),
+            password=os.getenv("SF_PASSWORD"),
+            security_token=os.getenv("SF_SECURITY_TOKEN", ""),
+            domain=os.getenv("SF_DOMAIN", "login"),
+            version=os.getenv("SF_API_VERSION", "59.0"),
+        )
 
-            if end_date:
-                query += ' AND "Date" <= :end_date'
-                params['end_date'] = end_date
+        def _escape_soql_string(value):
+            return str(value).replace("\\", "\\\\").replace("'", "\\'")
 
-            result = conn.execute(text(query), params)
-            conn.commit()
+        # Build SOQL WHERE clause from active filters
+        where_clauses = []
 
+        if strategy != 'ALL':
+            where_clauses.append(f"Strategy_Name__c = '{_escape_soql_string(strategy)}'")
+
+        if run_mode != 'ALL':
+            where_clauses.append(f"Run_Mode__c = '{_escape_soql_string(run_mode)}'")
+
+        if run_date != 'ALL':
+            where_clauses.append(f"Run_Date__c = {run_date}")
+
+        if start_date:
+            where_clauses.append(f"Trade_Date__c >= {start_date}")
+
+        if end_date:
+            where_clauses.append(f"Trade_Date__c <= {end_date}")
+
+        where_sql = " AND ".join(where_clauses) if where_clauses else "Id != null"
+        soql_query = f"SELECT Id FROM historical_backtests__c WHERE {where_sql}"
+        sf_records = sf.query_all(soql_query)
+
+        if not sf_records.get('records'):
             return jsonify({
-                "status": "success", 
-                "message": f"Deleted {result.rowcount} record(s) from database."
+                "status": "success",
+                "message": "No Salesforce records matched the selected filters."
             })
+
+        record_ids = [rec['Id'] for rec in sf_records['records']]
+        bulk_obj = getattr(sf.bulk, 'historical_backtests__c')
+        delete_records = [{'Id': rid} for rid in record_ids]
+        delete_result = bulk_obj.delete(delete_records)
+
+        sf_deleted = sum(1 for r in delete_result if r.get('success', False))
+        sf_failed = len(delete_result) - sf_deleted
+
+        logger.info("Deleted %d Salesforce backtest records (%d failed)", sf_deleted, sf_failed)
+
+        return jsonify({
+            "status": "success",
+            "message": f"Deleted Salesforce records: {sf_deleted} (failed: {sf_failed})"
+        })
     except Exception as e:
         logger.error(f"Error deleting backtest data: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
 @app.route('/api/test-strategy', methods=['POST'])
+@login_required
 def test_strategy():
+    """Execute selected strategy backtest and sync to Salesforce.
+    
+    Request JSON:
+    {
+        "strategy": "gamma_blast" or "v4_gamma" (default: ALL for all available),
+        "capital": 500000,
+        "start_date": "2025-01-01",
+        "end_date": "2025-12-31"
+    }
+    
+    Returns results summary and Salesforce sync status.
+    """
     data = request.json or {}
-    strategy = data.get('strategy', 'ALL')
+    strategy = data.get('strategy', 'gamma_blast')
+    
+    # Handle 'ALL' by running all strategies
+    strategies_to_run = ['gamma_blast', 'v4_gamma'] if strategy == 'ALL' else [strategy]
+    
+    # Validate strategy names
+    valid_strategies = ['gamma_blast', 'v4_gamma']
+    for strat in strategies_to_run:
+        if strat not in valid_strategies:
+            return jsonify({
+                "status": "error",
+                "message": f"Invalid strategy: {strat}. Must be one of: {', '.join(valid_strategies)}"
+            }), 400
+    
+    capital = data.get('capital', 500000)
     start_date = data.get('start_date')
     end_date = data.get('end_date')
-
-    # Always use the main dhan script because it has the DB saving logic
-    scripts = ["backtest_dhan_5min.py"]
-
-    import subprocess
-    env = os.environ.copy()
-    env["RUN_BACKTEST_STRATEGY"] = strategy
     
-    # Inject active credentials into subprocess environment
-    if CLIENT_ID:
-        env['DHAN_CLIENT_ID'] = str(CLIENT_ID)
-    if ACTIVE_TOKEN:
-        env['DHAN_ACCESS_TOKEN'] = str(ACTIVE_TOKEN)
-
-    if start_date:
-        env['BACKTEST_START_DATE'] = start_date
-    if end_date:
-        env['BACKTEST_END_DATE'] = end_date
-
-    count = 0
-    for script in scripts:
-        if os.path.exists(script):
+    try:
+        from backtest_orchestrator import BacktestOrchestrator
+        
+        all_results = {
+            "status": "success",
+            "strategies_run": [],
+            "message": f"Backtest completed for {len(strategies_to_run)} strategy/strategies"
+        }
+        
+        # Build kwargs for strategy
+        kwargs = {'capital': capital}
+        if start_date:
+            kwargs['start_date'] = start_date
+        if end_date:
+            kwargs['end_date'] = end_date
+        
+        # Run all selected strategies
+        for strat in strategies_to_run:
+            logger.info(f"Running strategy: {strat}")
+            orchestrator = BacktestOrchestrator()
+            
             try:
-                subprocess.run(["python", script], env=env, check=True)
-                count += 1
-            except subprocess.CalledProcessError as e:
-                return jsonify({"status": "error", "message": f"Error running {script}: {e}"}), 500
+                result = orchestrator.run_and_sync(strat, **kwargs)
+                all_results["strategies_run"].append({
+                    "strategy": strat,
+                    "execution": result.get("execution"),
+                    "sync": result.get("sync"),
+                    "status": "success" if "error" not in result else "error"
+                })
+            except Exception as e:
+                logger.error(f"Strategy {strat} failed: {e}", exc_info=True)
+                all_results["strategies_run"].append({
+                    "strategy": strat,
+                    "status": "error",
+                    "error": str(e)
+                })
+        
+        # Check if any strategy had errors
+        has_errors = any(r.get("status") == "error" for r in all_results.get("strategies_run", []))
+        if has_errors and len(strategies_to_run) > 1:
+            all_results["status"] = "partial"
+        elif has_errors and len(strategies_to_run) == 1:
+            all_results["status"] = "error"
+        
+        return jsonify(all_results)
+        
+    except Exception as e:
+        logger.error(f"Backtest execution failed: {e}", exc_info=True)
+        return jsonify({
+            "status": "error",
+            "message": str(e),
+            "strategies": strategies_to_run
+        }), 500
 
-    if count == 0:
-        return jsonify({"status": "error", "message": f"No backtest scripts found for {strategy}"}), 404
 
-    return jsonify({"status": "success", "message": f"Completed {count} backtest(s) for strategy: {strategy}. Data saved to database."})
+# ── Strategy Performance & Analytics ─────────────────────────────────────────
+
+@app.route('/api/strategy-performance', methods=['GET'])
+@login_required
+def get_strategy_performance():
+    """Get performance statistics for all strategies from Salesforce."""
+    try:
+        from simple_salesforce import Salesforce
+        
+        sf = Salesforce(
+            username=os.getenv("SF_USERNAME"),
+            password=os.getenv("SF_PASSWORD"),
+            security_token=os.getenv("SF_SECURITY_TOKEN", ""),
+            domain=os.getenv("SF_DOMAIN", "login"),
+            version=os.getenv("SF_API_VERSION", "59.0"),
+        )
+        
+        # Get all backtest records from Salesforce
+        query = """
+            SELECT Strategy_Name__c, 
+                   COUNT() as Total_Trades,
+                   SUM(Total_PNL__c) as Total_PNL,
+                   SUM(CASE WHEN Win__c = true THEN 1 ELSE 0 END) as Wins,
+                   AVG(Total_Return_Percentage__c) as Avg_Return_Pct,
+                   MAX(Total_Return_Percentage__c) as Max_Return,
+                   MIN(Total_Return_Percentage__c) as Min_Return
+            FROM historical_backtests__c
+            GROUP BY Strategy_Name__c
+            ORDER BY MAX(Trade_Date__c) DESC
+        """
+        
+        results = sf.query_all(query)
+        
+        strategies = []
+        for record in results.get('records', []):
+            strategies.append({
+                "name": record.get('Strategy_Name__c', 'Unknown'),
+                "total_trades": record.get('Total_Trades', 0),
+                "total_pnl": float(record.get('Total_PNL', 0) or 0),
+                "wins": record.get('Wins', 0),
+                "win_rate": round((record.get('Wins', 0) / max(record.get('Total_Trades', 1), 1)) * 100, 2),
+                "avg_return": round(float(record.get('Avg_Return_Pct', 0) or 0), 2),
+                "max_return": round(float(record.get('Max_Return', 0) or 0), 2),
+                "min_return": round(float(record.get('Min_Return', 0) or 0), 2),
+            })
+        
+        return jsonify({
+            "status": "success",
+            "data": strategies
+        })
+    except Exception as e:
+        logger.error(f"Failed to fetch strategy performance: {e}")
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
+
+
+@app.route('/api/strategy-backtest/<strategy>', methods=['GET'])
+@login_required
+def get_strategy_backtest(strategy):
+    """Get latest backtest results for a specific strategy from Salesforce."""
+    try:
+        from simple_salesforce import Salesforce
+        
+        sf = Salesforce(
+            username=os.getenv("SF_USERNAME"),
+            password=os.getenv("SF_PASSWORD"),
+            security_token=os.getenv("SF_SECURITY_TOKEN", ""),
+            domain=os.getenv("SF_DOMAIN", "login"),
+            version=os.getenv("SF_API_VERSION", "59.0"),
+        )
+        
+        # Get latest trades for the strategy
+        query = f"""
+            SELECT Run_Date__c, Trade_Date__c, Entry_Time__c, Exit_Time__c,
+                   Option_Type__c, Action__c, Qty__c, Buy_Price__c, Sell_Price__c,
+                   Peak_Price__c, Total_PNL__c, Total_Return_Percentage__c, 
+                   Capital_ROI_Pct__c, Reason__c, Win__c
+            FROM historical_backtests__c
+            WHERE Strategy_Name__c = '{strategy}'
+            ORDER BY Trade_Date__c DESC, Entry_Time__c DESC
+            LIMIT 50
+        """
+        
+        results = sf.query_all(query)
+        
+        trades = []
+        for record in results.get('records', []):
+            trades.append({
+                "run_date": record.get('Run_Date__c'),
+                "trade_date": record.get('Trade_Date__c'),
+                "entry_time": record.get('Entry_Time__c'),
+                "exit_time": record.get('Exit_Time__c'),
+                "option_type": record.get('Option_Type__c'),
+                "action": record.get('Action__c'),
+                "qty": record.get('Qty__c'),
+                "buy_price": float(record.get('Buy_Price__c', 0) or 0),
+                "sell_price": float(record.get('Sell_Price__c', 0) or 0),
+                "peak_price": float(record.get('Peak_Price__c', 0) or 0),
+                "pnl": float(record.get('Total_PNL__c', 0) or 0),
+                "return_pct": float(record.get('Total_Return_Percentage__c', 0) or 0),
+                "capital_roi_pct": float(record.get('Capital_ROI_Pct__c', 0) or 0),
+                "reason": record.get('Reason__c'),
+                "win": record.get('Win__c'),
+            })
+        
+        # Calculate summary stats
+        total_pnl = sum(t['pnl'] for t in trades)
+        total_trades = len(trades)
+        wins = sum(1 for t in trades if t['win'])
+        win_rate = round((wins / total_trades * 100), 2) if total_trades > 0 else 0
+        avg_return = round(sum(t['return_pct'] for t in trades) / total_trades, 2) if total_trades > 0 else 0
+        
+        return jsonify({
+            "status": "success",
+            "strategy": strategy,
+            "summary": {
+                "total_trades": total_trades,
+                "total_pnl": round(total_pnl, 2),
+                "wins": wins,
+                "win_rate": win_rate,
+                "avg_return": avg_return,
+                "latest_run_date": trades[0]['run_date'] if trades else None
+            },
+            "recent_trades": trades[:10]  # Return top 10 most recent
+        })
+    except Exception as e:
+        logger.error(f"Failed to fetch backtest for strategy {strategy}: {e}")
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
+
+
+@app.route('/api/expiry-strategy-stats/<expiry_date>', methods=['GET'])
+@login_required
+def get_expiry_strategy_stats(expiry_date):
+    """Get strategy performance for a specific expiry date."""
+    try:
+        from simple_salesforce import Salesforce
+        
+        sf = Salesforce(
+            username=os.getenv("SF_USERNAME"),
+            password=os.getenv("SF_PASSWORD"),
+            security_token=os.getenv("SF_SECURITY_TOKEN", ""),
+            domain=os.getenv("SF_DOMAIN", "login"),
+            version=os.getenv("SF_API_VERSION", "59.0"),
+        )
+        
+        # Get trades for this expiry date
+        query = f"""
+            SELECT Strategy_Name__c, Option_Type__c, Action__c, 
+                   COUNT() as Total,
+                   SUM(Total_PNL__c) as PNL,
+                   SUM(CASE WHEN Win__c = true THEN 1 ELSE 0 END) as Wins
+            FROM historical_backtests__c
+            WHERE Trade_Date__c = {expiry_date}
+            GROUP BY Strategy_Name__c, Option_Type__c, Action__c
+        """
+        
+        results = sf.query_all(query)
+        
+        stats = []
+        for record in results.get('records', []):
+            total = record.get('Total', 0)
+            wins = record.get('Wins', 0)
+            stats.append({
+                "strategy": record.get('Strategy_Name__c'),
+                "option_type": record.get('Option_Type__c'),
+                "action": record.get('Action__c'),
+                "total_trades": total,
+                "wins": wins,
+                "win_rate": round((wins / total * 100), 2) if total > 0 else 0,
+                "total_pnl": float(record.get('PNL', 0) or 0),
+            })
+        
+        return jsonify({
+            "status": "success",
+            "expiry_date": expiry_date,
+            "data": stats
+        })
+    except Exception as e:
+        logger.error(f"Failed to fetch expiry stats: {e}")
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
 
 
 if __name__ == '__main__':

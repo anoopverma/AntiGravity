@@ -1720,3 +1720,95 @@
 2026-03-10 22:09:29,111 - INFO - 127.0.0.1 - - [10/Mar/2026 22:09:29] "GET /api/status HTTP/1.1" 200 -
 2026-03-10 22:09:31,111 - INFO - 127.0.0.1 - - [10/Mar/2026 22:09:31] "GET /api/status HTTP/1.1" 200 -
 2026-03-10 22:09:31,114 - INFO - 127.0.0.1 - - [10/Mar/2026 22:09:31] "GET /api/system_logs HTTP/1.1" 200 -
+2026-04-12 02:13:17,189 - WARNING - Dhan client init failed: No module named 'dhanhq.dhan_context'
+2026-04-12 02:13:17,192 - INFO - Engine configured. Standing by for start.
+2026-04-12 02:15:13,303 - WARNING - Dhan client init failed: No module named 'dhanhq.dhan_context'
+2026-04-12 02:15:13,305 - INFO - Engine configured. Standing by for start.
+2026-04-12 02:15:13,349 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5002
+ * Running on http://192.168.1.10:5002
+2026-04-12 02:15:13,349 - INFO - [33mPress CTRL+C to quit[0m
+2026-04-12 02:15:31,515 - INFO - 127.0.0.1 - - [12/Apr/2026 02:15:31] "[32mGET / HTTP/1.1[0m" 302 -
+2026-04-12 02:15:31,559 - INFO - 127.0.0.1 - - [12/Apr/2026 02:15:31] "GET /login HTTP/1.1" 200 -
+2026-04-12 02:15:31,668 - INFO - 127.0.0.1 - - [12/Apr/2026 02:15:31] "GET /static/css/main.css HTTP/1.1" 200 -
+2026-04-12 02:15:32,174 - INFO - 127.0.0.1 - - [12/Apr/2026 02:15:32] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+2026-04-12 02:15:35,210 - INFO - 127.0.0.1 - - [12/Apr/2026 02:15:35] "POST /login HTTP/1.1" 200 -
+2026-04-12 02:15:35,233 - INFO - 127.0.0.1 - - [12/Apr/2026 02:15:35] "[36mGET /static/css/main.css HTTP/1.1[0m" 304 -
+2026-04-12 02:15:49,124 - INFO - 127.0.0.1 - - [12/Apr/2026 02:15:49] "POST /login HTTP/1.1" 200 -
+2026-04-12 02:15:49,175 - INFO - 127.0.0.1 - - [12/Apr/2026 02:15:49] "[36mGET /static/css/main.css HTTP/1.1[0m" 304 -
+2026-04-12 02:17:15,261 - INFO - 127.0.0.1 - - [12/Apr/2026 02:17:15] "POST /login HTTP/1.1" 200 -
+2026-04-12 02:17:15,292 - INFO - 127.0.0.1 - - [12/Apr/2026 02:17:15] "[36mGET /static/css/main.css HTTP/1.1[0m" 304 -
+2026-04-12 02:18:01,582 - WARNING - Dhan client init failed: No module named 'dhanhq.dhan_context'
+2026-04-12 02:18:01,584 - INFO - Engine configured. Standing by for start.
+2026-04-12 02:18:34,418 - WARNING - Dhan client init failed: No module named 'dhanhq.dhan_context'
+2026-04-12 02:18:34,420 - INFO - Engine configured. Standing by for start.
+2026-04-12 02:18:34,446 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5002
+ * Running on http://192.168.1.10:5002
+2026-04-12 02:18:34,446 - INFO - [33mPress CTRL+C to quit[0m
+2026-04-12 02:19:03,632 - INFO - 127.0.0.1 - - [12/Apr/2026 02:19:03] "[32mGET / HTTP/1.1[0m" 302 -
+2026-04-12 02:19:03,698 - INFO - 127.0.0.1 - - [12/Apr/2026 02:19:03] "GET /login HTTP/1.1" 200 -
+2026-04-12 02:19:03,738 - INFO - 127.0.0.1 - - [12/Apr/2026 02:19:03] "[36mGET /static/css/main.css HTTP/1.1[0m" 304 -
+2026-04-12 02:19:06,081 - INFO - 127.0.0.1 - - [12/Apr/2026 02:19:06] "POST /login HTTP/1.1" 200 -
+2026-04-12 02:19:06,096 - INFO - 127.0.0.1 - - [12/Apr/2026 02:19:06] "[36mGET /static/css/main.css HTTP/1.1[0m" 304 -
+2026-04-12 02:19:42,090 - INFO - 127.0.0.1 - - [12/Apr/2026 02:19:42] "POST /login HTTP/1.1" 200 -
+2026-04-12 02:19:42,143 - INFO - 127.0.0.1 - - [12/Apr/2026 02:19:42] "[36mGET /static/css/main.css HTTP/1.1[0m" 304 -
+2026-04-12 02:20:39,595 - INFO - 127.0.0.1 - - [12/Apr/2026 02:20:39] "POST /login HTTP/1.1" 200 -
+2026-04-12 02:20:39,614 - INFO - 127.0.0.1 - - [12/Apr/2026 02:20:39] "[36mGET /static/css/main.css HTTP/1.1[0m" 304 -
+2026-04-12 02:21:20,860 - INFO - 127.0.0.1 - - [12/Apr/2026 02:21:20] "GET /login HTTP/1.1" 200 -
+2026-04-12 02:22:47,494 - WARNING - Dhan client init failed: No module named 'dhanhq.dhan_context'
+2026-04-12 02:22:47,496 - INFO - Engine configured. Standing by for start.
+2026-04-12 02:23:14,756 - WARNING - Dhan client init failed: No module named 'dhanhq.dhan_context'
+2026-04-12 02:23:14,757 - INFO - Engine configured. Standing by for start.
+2026-04-12 02:23:14,780 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5002
+ * Running on http://192.168.1.10:5002
+2026-04-12 02:23:14,780 - INFO - [33mPress CTRL+C to quit[0m
+2026-04-12 02:24:09,257 - INFO - 127.0.0.1 - - [12/Apr/2026 02:24:09] "GET /login HTTP/1.1" 200 -
+2026-04-12 02:24:10,011 - INFO - 127.0.0.1 - - [12/Apr/2026 02:24:10] "[36mGET /static/css/main.css HTTP/1.1[0m" 304 -
+2026-04-12 02:24:12,718 - INFO - 127.0.0.1 - - [12/Apr/2026 02:24:12] "[32mPOST /login HTTP/1.1[0m" 302 -
+2026-04-12 02:24:12,753 - INFO - 127.0.0.1 - - [12/Apr/2026 02:24:12] "GET / HTTP/1.1" 200 -
+2026-04-12 02:24:12,830 - INFO - 127.0.0.1 - - [12/Apr/2026 02:24:12] "[36mGET /static/css/main.css HTTP/1.1[0m" 304 -
+2026-04-12 02:24:12,854 - INFO - 127.0.0.1 - - [12/Apr/2026 02:24:12] "GET /api/status HTTP/1.1" 200 -
+2026-04-12 02:24:12,867 - INFO - 127.0.0.1 - - [12/Apr/2026 02:24:12] "GET /api/system_logs HTTP/1.1" 200 -
+2026-04-12 02:24:15,059 - ERROR - Failed to fetch strategy performance: Malformed request https://myavi-dev-ed.my.salesforce.com/services/data/v59.0/query/?q=%0A++++++++++++SELECT+Strategy_Name__c%2C+%0A+++++++++++++++++++COUNT%28%29+as+Total_Trades%2C%0A+++++++++++++++++++SUM%28Total_PNL__c%29+as+Total_PNL%2C%0A+++++++++++++++++++SUM%28CASE+WHEN+Win__c+%3D+true+THEN+1+ELSE+0+END%29+as+Wins%2C%0A+++++++++++++++++++AVG%28Total_Return_Percentage__c%29+as+Avg_Return_Pct%2C%0A+++++++++++++++++++MAX%28Total_Return_Percentage__c%29+as+Max_Return%2C%0A+++++++++++++++++++MIN%28Total_Return_Percentage__c%29+as+Min_Return%0A++++++++++++FROM+historical_backtests__c%0A++++++++++++GROUP+BY+Strategy_Name__c%0A++++++++++++ORDER+BY+MAX%28Trade_Date__c%29+DESC%0A++++++++. Response content: [{'message': "\n            SELECT Strategy_Name__c, \n                        ^\nERROR at Row:2:Column:25\nunexpected token: 'COUNT()'", 'errorCode': 'MALFORMED_QUERY'}]
+2026-04-12 02:24:15,062 - INFO - 127.0.0.1 - - [12/Apr/2026 02:24:15] "[35m[1mGET /api/strategy-performance HTTP/1.1[0m" 500 -
+2026-04-12 02:24:15,641 - INFO - 127.0.0.1 - - [12/Apr/2026 02:24:15] "GET /backtest HTTP/1.1" 200 -
+2026-04-12 02:24:15,673 - INFO - 127.0.0.1 - - [12/Apr/2026 02:24:15] "[36mGET /static/css/main.css HTTP/1.1[0m" 304 -
+2026-04-12 02:24:17,920 - INFO - 127.0.0.1 - - [12/Apr/2026 02:24:17] "GET /api/backtests HTTP/1.1" 200 -
+2026-04-12 02:24:57,838 - INFO - 127.0.0.1 - - [12/Apr/2026 02:24:57] "GET / HTTP/1.1" 200 -
+2026-04-12 02:24:58,064 - INFO - 127.0.0.1 - - [12/Apr/2026 02:24:58] "[36mGET /static/css/main.css HTTP/1.1[0m" 304 -
+2026-04-12 02:24:58,102 - INFO - 127.0.0.1 - - [12/Apr/2026 02:24:58] "GET /api/status HTTP/1.1" 200 -
+2026-04-12 02:24:58,173 - INFO - 127.0.0.1 - - [12/Apr/2026 02:24:58] "GET /api/system_logs HTTP/1.1" 200 -
+2026-04-12 02:24:59,677 - ERROR - Failed to fetch strategy performance: Malformed request https://myavi-dev-ed.my.salesforce.com/services/data/v59.0/query/?q=%0A++++++++++++SELECT+Strategy_Name__c%2C+%0A+++++++++++++++++++COUNT%28%29+as+Total_Trades%2C%0A+++++++++++++++++++SUM%28Total_PNL__c%29+as+Total_PNL%2C%0A+++++++++++++++++++SUM%28CASE+WHEN+Win__c+%3D+true+THEN+1+ELSE+0+END%29+as+Wins%2C%0A+++++++++++++++++++AVG%28Total_Return_Percentage__c%29+as+Avg_Return_Pct%2C%0A+++++++++++++++++++MAX%28Total_Return_Percentage__c%29+as+Max_Return%2C%0A+++++++++++++++++++MIN%28Total_Return_Percentage__c%29+as+Min_Return%0A++++++++++++FROM+historical_backtests__c%0A++++++++++++GROUP+BY+Strategy_Name__c%0A++++++++++++ORDER+BY+MAX%28Trade_Date__c%29+DESC%0A++++++++. Response content: [{'message': "\n            SELECT Strategy_Name__c, \n                        ^\nERROR at Row:2:Column:25\nunexpected token: 'COUNT()'", 'errorCode': 'MALFORMED_QUERY'}]
+2026-04-12 02:24:59,679 - INFO - 127.0.0.1 - - [12/Apr/2026 02:24:59] "[35m[1mGET /api/strategy-performance HTTP/1.1[0m" 500 -
+2026-04-12 02:25:29,525 - ERROR - Failed to fetch strategy performance: Malformed request https://myavi-dev-ed.my.salesforce.com/services/data/v59.0/query/?q=%0A++++++++++++SELECT+Strategy_Name__c%2C+%0A+++++++++++++++++++COUNT%28%29+as+Total_Trades%2C%0A+++++++++++++++++++SUM%28Total_PNL__c%29+as+Total_PNL%2C%0A+++++++++++++++++++SUM%28CASE+WHEN+Win__c+%3D+true+THEN+1+ELSE+0+END%29+as+Wins%2C%0A+++++++++++++++++++AVG%28Total_Return_Percentage__c%29+as+Avg_Return_Pct%2C%0A+++++++++++++++++++MAX%28Total_Return_Percentage__c%29+as+Max_Return%2C%0A+++++++++++++++++++MIN%28Total_Return_Percentage__c%29+as+Min_Return%0A++++++++++++FROM+historical_backtests__c%0A++++++++++++GROUP+BY+Strategy_Name__c%0A++++++++++++ORDER+BY+MAX%28Trade_Date__c%29+DESC%0A++++++++. Response content: [{'message': "\n            SELECT Strategy_Name__c, \n                        ^\nERROR at Row:2:Column:25\nunexpected token: 'COUNT()'", 'errorCode': 'MALFORMED_QUERY'}]
+2026-04-12 02:25:29,528 - INFO - 127.0.0.1 - - [12/Apr/2026 02:25:29] "[35m[1mGET /api/strategy-performance HTTP/1.1[0m" 500 -
+2026-04-12 02:25:30,641 - ERROR - Failed to fetch strategy performance: Malformed request https://myavi-dev-ed.my.salesforce.com/services/data/v59.0/query/?q=%0A++++++++++++SELECT+Strategy_Name__c%2C+%0A+++++++++++++++++++COUNT%28%29+as+Total_Trades%2C%0A+++++++++++++++++++SUM%28Total_PNL__c%29+as+Total_PNL%2C%0A+++++++++++++++++++SUM%28CASE+WHEN+Win__c+%3D+true+THEN+1+ELSE+0+END%29+as+Wins%2C%0A+++++++++++++++++++AVG%28Total_Return_Percentage__c%29+as+Avg_Return_Pct%2C%0A+++++++++++++++++++MAX%28Total_Return_Percentage__c%29+as+Max_Return%2C%0A+++++++++++++++++++MIN%28Total_Return_Percentage__c%29+as+Min_Return%0A++++++++++++FROM+historical_backtests__c%0A++++++++++++GROUP+BY+Strategy_Name__c%0A++++++++++++ORDER+BY+MAX%28Trade_Date__c%29+DESC%0A++++++++. Response content: [{'message': "\n            SELECT Strategy_Name__c, \n                        ^\nERROR at Row:2:Column:25\nunexpected token: 'COUNT()'", 'errorCode': 'MALFORMED_QUERY'}]
+2026-04-12 02:25:30,641 - INFO - 127.0.0.1 - - [12/Apr/2026 02:25:30] "[35m[1mGET /api/strategy-performance HTTP/1.1[0m" 500 -
+2026-04-12 02:39:30,229 - WARNING - Dhan client init failed: No module named 'dhanhq.dhan_context'
+2026-04-12 02:39:30,231 - INFO - Engine configured. Standing by for start.
+2026-04-12 02:40:29,355 - WARNING - Dhan client init failed: No module named 'dhanhq.dhan_context'
+2026-04-12 02:40:29,357 - INFO - Engine configured. Standing by for start.
+2026-04-12 02:40:29,376 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5002
+ * Running on http://192.168.1.10:5002
+2026-04-12 02:40:29,376 - INFO - [33mPress CTRL+C to quit[0m
+2026-04-12 02:40:39,689 - INFO - 127.0.0.1 - - [12/Apr/2026 02:40:39] "GET / HTTP/1.1" 200 -
+2026-04-12 02:40:39,799 - INFO - 127.0.0.1 - - [12/Apr/2026 02:40:39] "[36mGET /static/css/main.css HTTP/1.1[0m" 304 -
+2026-04-12 02:40:39,801 - INFO - 127.0.0.1 - - [12/Apr/2026 02:40:39] "GET /api/status HTTP/1.1" 200 -
+2026-04-12 02:40:39,803 - INFO - 127.0.0.1 - - [12/Apr/2026 02:40:39] "GET /api/system_logs HTTP/1.1" 200 -
+2026-04-12 02:40:43,024 - INFO - 127.0.0.1 - - [12/Apr/2026 02:40:43] "GET /backtest HTTP/1.1" 200 -
+2026-04-12 02:40:43,050 - INFO - 127.0.0.1 - - [12/Apr/2026 02:40:43] "[36mGET /static/css/main.css HTTP/1.1[0m" 304 -
+2026-04-12 02:40:43,247 - INFO - 127.0.0.1 - - [12/Apr/2026 02:40:43] "GET /api/backtests HTTP/1.1" 200 -
+2026-04-12 02:41:23,681 - INFO - 127.0.0.1 - - [12/Apr/2026 02:41:23] "POST /api/delete-backtest HTTP/1.1" 200 -
+2026-04-12 02:41:23,714 - INFO - 127.0.0.1 - - [12/Apr/2026 02:41:23] "GET /api/backtests HTTP/1.1" 200 -
+2026-04-12 02:41:29,761 - INFO - 127.0.0.1 - - [12/Apr/2026 02:41:29] "GET /api/backtests HTTP/1.1" 200 -
+2026-04-12 02:41:47,848 - INFO - 127.0.0.1 - - [12/Apr/2026 02:41:47] "POST /api/delete-backtest HTTP/1.1" 200 -
+2026-04-12 02:41:47,877 - INFO - 127.0.0.1 - - [12/Apr/2026 02:41:47] "GET /api/backtests HTTP/1.1" 200 -
+2026-04-12 02:41:59,293 - INFO - 127.0.0.1 - - [12/Apr/2026 02:41:59] "GET /api/backtests HTTP/1.1" 200 -
+2026-04-12 02:42:16,490 - INFO - 127.0.0.1 - - [12/Apr/2026 02:42:16] "GET /api/backtests HTTP/1.1" 200 -

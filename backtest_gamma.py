@@ -12,16 +12,21 @@ import pickle
 import logging
 import pandas as pd
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
-from sqlalchemy import create_engine
+from simple_salesforce import Salesforce
 
 # Reuse OptionFetcher from backtest_v4
 sys.path.insert(0, os.path.dirname(__file__))
 from backtest_v4 import OptionFetcher
 
-load_dotenv()
+load_dotenv(override=True)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+SF_BACKTEST_OBJECT = "historical_backtests__c"
+IST_TZ = ZoneInfo("Asia/Kolkata")
+UTC_TZ = ZoneInfo("UTC")
 
 # ── Strategy Parameters ─────────────────────────────────────────────────────
 LEG_EXPANSION    = 1.20   # individual CE or PE must spike 20% from benchmark to SELL
@@ -234,7 +239,7 @@ class GammaSpikeBacktester:
                         break   # one trade per day
 
         self.print_summary()
-        self.save_to_db()
+        self.save_to_salesforce()
 
     def print_summary(self):
         if not self.results:
@@ -253,36 +258,81 @@ class GammaSpikeBacktester:
         print(f"  Total Trades : {len(df)}")
         print(f"  Win Rate     : {win_rate:.1f}%")
         print()
-        cols = ['Date','Entry_Time','Exit_Time','Option_Type','Buy_Price','Peak_Price','Sell_Price','PNL','Reason','Win']
-        print(df[cols].to_string(index=False))
+        # Reporting labels: short option entry is SELL, exit is BUY BACK.
+        display_df = df.rename(columns={
+            'Sell_Price': 'Entry_Price',
+            'Buy_Price': 'Exit_Price',
+        })
+        cols = ['Date','Entry_Time','Exit_Time','Option_Type','Entry_Price','Peak_Price','Exit_Price','PNL','Reason','Win']
+        print(display_df[cols].to_string(index=False))
         print()
 
-    def save_to_db(self):
+    def save_to_salesforce(self):
         if not self.results:
             return
         try:
-            uri = os.getenv("POSTGRES_URI")
-            if not uri:
-                logger.warning("No POSTGRES_URI — skipping DB save.")
-                return
-            engine = create_engine(uri)
-            run_ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            df_new = pd.DataFrame(self.results)
-            df_new.insert(0, 'Run_Date',       run_ts)
-            df_new.insert(1, 'Strategy_Name',  self.strategy_name)
-            df_new.insert(2, 'Run_Mode',        'Backtest')
+            sf = Salesforce(
+                username=os.getenv("SF_USERNAME"),
+                password=os.getenv("SF_PASSWORD"),
+                security_token=os.getenv("SF_SECURITY_TOKEN", ""),
+                domain=os.getenv("SF_DOMAIN", "login"),
+                version=os.getenv("SF_API_VERSION", "59.0"),
+            )
+        except Exception as exc:
+            logger.error("Salesforce login failed: %s", exc)
+            return
 
-            try:
-                existing = pd.read_sql("SELECT * FROM historical_backtests", con=engine)
-                existing = existing[existing['Strategy_Name'] != self.strategy_name]
-                df_final = pd.concat([existing, df_new], ignore_index=True)
-            except Exception:
-                df_final = df_new
+        run_ts = datetime.utcnow().strftime("%Y-%m-%d")
 
-            df_final.to_sql('historical_backtests', con=engine, if_exists='replace', index=False)
-            logger.info(f"-> DB SYNC: v4_gamma_spike {len(df_new)} rows saved to historical_backtests.")
-        except Exception as e:
-            logger.error(f"DB Save failed: {e}")
+        def _to_sf_datetime(date_str, time_str):
+            local_dt = datetime.strptime(
+                f"{date_str} {time_str}", "%Y-%m-%d %H:%M:%S"
+            ).replace(tzinfo=IST_TZ)
+            utc_dt = local_dt.astimezone(UTC_TZ)
+            return utc_dt.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+
+        trade_records = [
+            {
+                "Run_Date__c":                run_ts,
+                "Strategy_Name__c":           self.strategy_name,
+                "Total_PNL__c":               r["PNL"],
+                "Total_Return_Percentage__c": r["ROI%"],
+                "Trade_Date__c":              r["Date"],
+                "Entry_Time__c":              _to_sf_datetime(r["Date"], r["Entry_Time"]),
+                "Exit_Time__c":               _to_sf_datetime(r["Date"], r["Exit_Time"]),
+                "Option_Type__c":             r["Option_Type"],
+                "Action__c":                  r["Action"],
+                "Qty__c":                     QTY,
+                "Buy_Price__c":               r["Buy_Price"],
+                "Peak_Price__c":              r["Peak_Price"],
+                "Sell_Price__c":              r["Sell_Price"],
+                "Reason__c":                  r["Reason"],
+                "Win__c":                     r["Win"],
+                "Capital_ROI_Pct__c":         r["Capital_ROI%"],
+                "Run_Mode__c":                "backtest",
+                "Strike__c":                  r["Strike"],
+                "PnL_INR__c":                 r["PNL"],
+                "Parameters__c":              r["Parameters"],
+            }
+            for r in self.results
+        ]
+
+        try:
+            bulk_backtests = getattr(sf.bulk, SF_BACKTEST_OBJECT)
+
+            # Insert per-trade rows
+            res = bulk_backtests.insert(trade_records)
+            ok   = sum(1 for r in res if r.get("success"))
+            fail = sum(1 for r in res if not r.get("success"))
+            logger.info(
+                "-> SF SYNC: %d trade rows saved to %s (%d failed).",
+                ok, SF_BACKTEST_OBJECT, fail,
+            )
+            if fail:
+                bad = [r for r in res if not r.get("success")]
+                logger.warning("First error: %s", bad[0].get("errors"))
+        except Exception as exc:
+            logger.error("Salesforce save failed: %s", exc)
 
 
 if __name__ == "__main__":

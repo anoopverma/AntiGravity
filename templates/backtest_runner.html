@@ -22,15 +22,12 @@
                 <h1>AntiGravity — Backtest Runner</h1>
             </div>
             <div class="nav-links">
-                <a href="/" class="nav-btn">Dashboard</a>
-                <a href="/expiries" class="nav-btn">Expiries</a>
-                <a href="/backtest" class="nav-btn active">Backtests</a>
-                <a href="/logout" class="btn-logout">Sign Out →</a>
+                <a href="/" class="nav-btn">← Dashboard</a>
+                <a href="/expiries" class="nav-btn">📅 Expiries</a>
             </div>
         </div>
 
-        <!-- Config Panel -->
-        <div class="card">
+        <div class="card" style="margin-bottom: 1.5rem;">
             <div class="card-title">⚙ Configure Run</div>
 
             <div class="config-flex">
@@ -124,10 +121,10 @@
             </div>
         </div>
 
-        <!-- DB Table -->
+        <!-- Salesforce Table -->
         <div class="card">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                <div class="card-title" style="margin-bottom: 0;">Historical Backtests Database (PostgreSQL)</div>
+                <div class="card-title" style="margin-bottom: 0;">Historical Backtests (Salesforce)</div>
                 <div>
                     <button class="btn-sm" onclick="exportToCSV()"
                         style="margin-right: 0.5rem; background-color: #238636; color: white;">📊 Export CSV</button>
@@ -161,7 +158,7 @@
                     </thead>
                     <tbody id="backtest-tbody">
                         <tr>
-                            <td colspan="18" class="empty-state">Loading database records...</td>
+                            <td colspan="18" class="empty-state">Loading Salesforce records...</td>
                         </tr>
                     </tbody>
                     <tfoot id="backtest-tfoot"></tfoot>
@@ -228,9 +225,9 @@
 
                 if (data.status === "success" && data.data.length > 0) {
 
-                    // Add DB unique strategy names to the dropdown if they don't exist
-                    const dbStrategies = [...new Set(data.data.map(r => r.Strategy_Name).filter(Boolean))];
-                    dbStrategies.forEach(s => {
+                    // Add unique strategy names from Salesforce if they don't exist
+                    const sfStrategies = [...new Set(data.data.map(r => r.Strategy_Name).filter(Boolean))];
+                    sfStrategies.forEach(s => {
                         let exists = false;
                         for (let i = 0; i < select.options.length; i++) {
                             if (select.options[i].value === s) { exists = true; break; }
@@ -238,9 +235,9 @@
                         if (!exists) {
                             const opt = document.createElement('option');
                             opt.value = s;
-                            opt.textContent = `DB: ${s}`;
+                            opt.textContent = s;
                             select.appendChild(opt);
-                            STRATEGIES[s] = { label: s, badge: 'badge-stg', desc: `Existing Database Strategy: ${s}` };
+                            STRATEGIES[s] = { label: s, badge: 'badge-stg', desc: `Existing Salesforce Strategy: ${s}` };
                         }
                     });
 
@@ -255,24 +252,24 @@
                     // Populate Run Mode dropdown (client-side)
                     const rmSelect = document.getElementById('run-mode-select');
                     const currentRmVal = rmSelect.value;
-                    const dbRunModes = [...new Set(_allData.map(r => r.Run_Mode).filter(Boolean))].sort();
+                    const sfRunModes = [...new Set(_allData.map(r => r.Run_Mode).filter(Boolean))].sort();
 
                     rmSelect.innerHTML = '<option value="ALL">All Modes</option>';
-                    dbRunModes.forEach(rm => {
+                    sfRunModes.forEach(rm => {
                         const opt = document.createElement('option');
                         opt.value = rm;
                         opt.textContent = rm;
                         rmSelect.appendChild(opt);
                     });
-                    if (dbRunModes.includes(currentRmVal)) { rmSelect.value = currentRmVal; }
+                    if (sfRunModes.includes(currentRmVal)) { rmSelect.value = currentRmVal; }
 
                     // Populate Run Date dropdown (client-side, no onchange fire)
                     const rdSelect = document.getElementById('run-date-select');
                     const currentRdVal = rdSelect.value;
-                    const dbRunDates = [...new Set(_allData.map(r => r.Run_Date).filter(Boolean))].sort().reverse();
+                    const sfRunDates = [...new Set(_allData.map(r => r.Run_Date).filter(Boolean))].sort().reverse();
 
                     rdSelect.innerHTML = '<option value="ALL">All Runs</option>';
-                    dbRunDates.forEach(rd => {
+                    sfRunDates.forEach(rd => {
                         const opt = document.createElement('option');
                         opt.value = rd;
                         opt.textContent = rd;
@@ -280,21 +277,21 @@
                     });
 
                     // On first load (currentRdVal = 'ALL'), auto-select latest run date
-                    if (dbRunDates.length > 0 && currentRdVal === 'ALL') {
-                        rdSelect.value = dbRunDates[0]; // dbRunDates is sorted desc, so [0] = latest
-                    } else if (dbRunDates.includes(currentRdVal)) {
+                    if (sfRunDates.length > 0 && currentRdVal === 'ALL') {
+                        rdSelect.value = sfRunDates[0]; // sfRunDates is sorted desc, so [0] = latest
+                    } else if (sfRunDates.includes(currentRdVal)) {
                         rdSelect.value = currentRdVal;
                     }
 
-                    const latestRun = dbRunDates[0] || 'N/A';
+                    const latestRun = sfRunDates[0] || 'N/A';
                     const totalRecords = data.data.length;
-                    const strategies = dbStrategies.join(', ') || 'All';
+                    const strategies = sfStrategies.join(', ') || 'All';
                     log(`✅ Data fetched — ${totalRecords} records | Strategies: ${strategies} | Latest run: ${latestRun}`, 'log-info');
 
                 } else {
                     _allData = [];
                     document.getElementById('backtest-tbody').innerHTML =
-                        `<tr><td colspan="18" class="empty-state">No database records found. Run a backtest first.</td></tr>`;
+                        `<tr><td colspan="18" class="empty-state">No Salesforce records found. Run a backtest first.</td></tr>`;
                     document.getElementById('backtest-tfoot').innerHTML = '';
                     document.getElementById('equity-card').style.display = 'none';
                 }
@@ -321,6 +318,9 @@
             const selectedRunDate = document.getElementById('run-date-select').value;
 
             let rows = _allData.slice();
+            if (selectedStrategy !== 'ALL') {
+                rows = rows.filter(r => r.Strategy_Name === selectedStrategy);
+            }
             if (selectedRunMode !== 'ALL') {
                 rows = rows.filter(r => r.Run_Mode === selectedRunMode);
             }
@@ -397,7 +397,7 @@
 
         function onStrategyChange() {
             const key = document.getElementById('strategy-select').value;
-            const s = STRATEGIES[key] || { label: key, badge: 'badge-stg', desc: `DB Strategy: ${key}` };
+            const s = STRATEGIES[key] || { label: key, badge: 'badge-stg', desc: `Salesforce Strategy: ${key}` };
             document.getElementById('strategy-meta').innerHTML = `
                 <span class="strategy-badge ${s.badge}">● ${s.label}</span>
                 <p class="strategy-desc">${s.desc}</p>
@@ -408,7 +408,7 @@
         async function testDhan() {
             const btn = document.getElementById('run-btn');
             btn.disabled = true;
-            btn.innerHTML = `<span class="spinner" style="margin-right:8px; display:inline-block; border: 2px solid white; border-top: 2px solid transparent; border-radius: 50%; width: 14px; height: 14px; animation: spin 1s linear infinite;"></span> Fetching & Testing...`;
+            btn.innerHTML = `<span class="spinner" style="margin-right:8px; display:inline-block; border: 2px solid white; border-top: 2px solid transparent; border-radius: 50%; width: 14px; height: 14px; animation: spin 1s linear infinite;"></span> Running...`;
             document.getElementById('log-box').innerHTML = '';
             setStatus('running');
 
@@ -419,8 +419,10 @@
                 capital: parseInt(document.getElementById('capital').value),
             };
 
-            log(`Starting actual backend Dhan Test for: ${payload.strategy}`, 'log-warn');
-            log(`Dates: ${payload.start_date} to ${payload.end_date}`, 'log-info');
+            log(`🎯 Starting backtest: ${payload.strategy}`, 'log-warn');
+            log(`📅 Date range: ${payload.start_date} to ${payload.end_date}`, 'log-info');
+            log(`💰 Initial Capital: ₹${payload.capital.toLocaleString()}`, 'log-info');
+            log(`⏳ This may take a few moments...`, 'log-warn');
 
             try {
                 const resp = await fetch('/api/test-strategy', {
@@ -431,15 +433,50 @@
 
                 const data = await resp.json();
 
-                if (resp.ok) {
+                if (resp.ok && data.status === 'success') {
                     setStatus('done');
                     log('✅ Backtest Execution Completed Successfully!', 'log-success');
-                    log(`Message: ${data.message}`, 'log-success');
-                    log('Pulling saved results from the Database...', 'log-info');
-                    fetchBacktests();
+                    
+                    // Display results for each strategy
+                    if (data.strategies_run && Array.isArray(data.strategies_run)) {
+                        data.strategies_run.forEach(result => {
+                            const strat = result.strategy;
+                            const exec = result.execution;
+                            const sync = result.sync;
+                            
+                            if (result.status === 'success') {
+                                log(`📊 Strategy: ${strat} — ${exec?.message || 'Completed'}`, 'log-success');
+                                log(`   Total Trades: ${exec?.total_trades || 0}`, 'log-info');
+                                log(`   Salesforce Sync: ${sync?.message || 'Synced'}`, 'log-success');
+                            } else {
+                                log(`❌ Strategy ${strat} failed: ${result.error || 'Unknown error'}`, 'log-error');
+                            }
+                        });
+                    }
+                    
+                    log('📥 Pulling saved results from Salesforce...', 'log-info');
+                    setTimeout(() => fetchBacktests(), 1000);
+                } else if (data.status === 'partial') {
+                    setStatus('done');
+                    log('⚠️  Backtest completed with some errors', 'log-warn');
+                    if (data.strategies_run && Array.isArray(data.strategies_run)) {
+                        data.strategies_run.forEach(result => {
+                            if (result.status === 'error') {
+                                log(`❌ ${result.strategy}: ${result.error || 'Unknown error'}`, 'log-error');
+                            } else {
+                                log(`✅ ${result.strategy}: Completed`, 'log-success');
+                            }
+                        });
+                    }
+                    setTimeout(() => fetchBacktests(), 1000);
                 } else {
                     setStatus('error');
-                    log(`❌ Backend Error: ${data.message}`, 'log-error');
+                    log(`❌ Backtest Failed: ${data.message || 'Unknown error'}`, 'log-error');
+                    if (data.strategies_run) {
+                        data.strategies_run.forEach(r => {
+                            if (r.error) log(`   ${r.strategy}: ${r.error}`, 'log-error');
+                        });
+                    }
                 }
             } catch (e) {
                 setStatus('error');
@@ -451,18 +488,39 @@
         }
 
         async function deleteDbData() {
+            const strategy = document.getElementById('strategy-select').value;
+            const runMode = document.getElementById('run-mode-select').value;
+            const runDate = document.getElementById('run-date-select').value;
+            const startDate = document.getElementById('start-date').value;
+            const endDate = document.getElementById('end-date').value;
+
+            // Build confirmation message
+            let confirmMsg = '⚠️ Delete records with filters:\n\n';
+            confirmMsg += `Strategy: ${strategy !== 'ALL' ? strategy : 'All'}\n`;
+            confirmMsg += `Run Mode: ${runMode !== 'ALL' ? runMode : 'All'}\n`;
+            confirmMsg += `Run Date: ${runDate !== 'ALL' ? runDate : 'All'}\n`;
+            confirmMsg += `Date Range: ${startDate} to ${endDate}\n\n`;
+            confirmMsg += 'This will delete matching records from Salesforce.\nAre you sure?';
+
+            if (!confirm(confirmMsg)) {
+                log('❌ Delete operation cancelled', 'log-warn');
+                return;
+            }
+
             const btn = document.getElementById('del-db-btn');
             const originalHtml = btn.innerHTML;
             btn.disabled = true;
             btn.innerHTML = `<span class="spinner" style="margin-right:8px; display:inline-block; border: 2px solid white; border-top: 2px solid transparent; border-radius: 50%; width: 14px; height: 14px; animation: spin 1s linear infinite;"></span> Deleting...`;
 
             const payload = {
-                strategy: document.getElementById('strategy-select').value,
-                start_date: document.getElementById('start-date').value,
-                end_date: document.getElementById('end-date').value,
+                strategy: strategy,
+                run_mode: runMode,
+                run_date: runDate,
+                start_date: startDate,
+                end_date: endDate,
             };
 
-            log(`Attempting to delete database records for strategy: ${payload.strategy}`, 'log-warn');
+            log(`🗑️ Deleting records for strategy: ${strategy}, mode: ${runMode}, date: ${runDate}`, 'log-warn');
 
             try {
                 const resp = await fetch('/api/delete-backtest', {
@@ -475,7 +533,10 @@
 
                 if (resp.ok) {
                     log(`✅ ${data.message}`, 'log-success');
-                    fetchBacktests();
+                    setTimeout(() => {
+                        fetchBacktests();
+                        renderTable();
+                    }, 500);
                 } else {
                     log(`❌ Delete Error: ${data.message}`, 'log-error');
                 }
@@ -488,7 +549,7 @@
         }
 
         function showStatistics() {
-            log('📊 Fetching statistics from database...', 'log-info');
+            log('📊 Fetching statistics from Salesforce...', 'log-info');
             fetchBacktests();
         }
 

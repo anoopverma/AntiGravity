@@ -1,0 +1,5 @@
+{
+    "xml.preferences.showSchemaDocumentationType": "none",
+    "python.terminal.useEnvFile": true,
+    "python.envFile": "${workspaceFolder}/.env"
+}
