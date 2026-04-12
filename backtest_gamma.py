@@ -239,7 +239,6 @@ class GammaSpikeBacktester:
                         break   # one trade per day
 
         self.print_summary()
-        self.save_to_salesforce()
 
     def print_summary(self):
         if not self.results:

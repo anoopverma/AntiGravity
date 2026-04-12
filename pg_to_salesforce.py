@@ -112,10 +112,10 @@ TABLE_COLUMN_TO_FIELD_MAP = {
         "Reason":        "Reason__c",                # NEW
         "Win":           "Win__c",                   # NEW
         "Capital_ROI%":  "Capital_ROI_Pct__c",       # NEW
-        "Capital Roi%":  "Capital_ROI_Pct__c",       # alias
+       
         "Run_Mode":      "Run_Mode__c",              # NEW
         "Strike":        "Strike__c",                # NEW
-        "Type":          "Trade_Type__c",            # NEW
+        
         "PnL_INR":       "PnL_INR__c",              # NEW
         "Parameters":    "Parameters__c",            # NEW
     },
