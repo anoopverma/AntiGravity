@@ -55,14 +55,13 @@ def init_dhan():
     global dhan
     try:
         from dhanhq import dhanhq as _DhanHQ
-        from dhanhq.dhan_context import DhanContext
         if CLIENT_ID and ACCESS_TOKEN:
-            context = DhanContext(str(CLIENT_ID), str(ACCESS_TOKEN))
-            dhan = _DhanHQ(context)
+            dhan = _DhanHQ(str(CLIENT_ID), str(ACCESS_TOKEN))
             # Update active strategies if already booted
             if 'active_strategies' in globals() and active_strategies is not None:
                 for strat in active_strategies:
-                    strat.dhan = dhan
+                    if hasattr(strat, 'dhan'):
+                        strat.dhan = dhan
             logger.info("Dhan client initialised successfully via Environment Access Token.")
         else:
             logger.warning("DHAN_CLIENT_ID / DHAN_ACCESS_TOKEN not set — local trading disabled.")
@@ -380,7 +379,21 @@ def start():
                     loaded_names.append(f"GammaBlast[{'P' if is_paper else 'L'}]")
                 except Exception as e:
                     logger.error(f"Failed to load Gamma Blast: {e}")
-                    
+
+            elif strat_id == "zscore_nifty":
+                try:
+                    from strategy.zscore_nifty_strategy import NiftyZScoreStrategy, ZScoreStrategyParams
+                    s3 = NiftyZScoreStrategy(
+                        access_token=ACCESS_TOKEN,
+                        client_id=CLIENT_ID,
+                        params=ZScoreStrategyParams(),
+                        paper_trade=is_paper,
+                    )
+                    active_strategies.append(s3)
+                    loaded_names.append(f"ZScore[{'P' if is_paper else 'L'}]")
+                except Exception as e:
+                    logger.error(f"Failed to load ZScore: {e}")
+
         for s in live_strategies:
             load_strategy(s, False)
         for s in paper_strategies:
@@ -405,7 +418,12 @@ def start():
         already_loaded = []
         
         def is_already_loaded(strat_id, is_paper):
-            expected_class = "NiftyV4TrailingSLStrategy" if strat_id == "v4_gamma" else "NiftyGammaSpikeStrategy"
+            class_map = {
+                "v4_gamma":     "NiftyV4TrailingSLStrategy",
+                "gamma_blast":  "NiftyGammaSpikeStrategy",
+                "zscore_nifty": "NiftyZScoreStrategy",
+            }
+            expected_class = class_map.get(strat_id, "")
             for s in active_strategies:
                 if s.__class__.__name__ == expected_class and getattr(s, 'paper_trade', False) == is_paper:
                     return True
@@ -414,7 +432,8 @@ def start():
         def append_strategy(strat_id, is_paper):
             if is_already_loaded(strat_id, is_paper):
                 mode = 'P' if is_paper else 'L'
-                name = "V4" if strat_id == "v4_gamma" else "GammaBlast"
+                name_map = {"v4_gamma": "V4", "gamma_blast": "GammaBlast", "zscore_nifty": "ZScore"}
+                name = name_map.get(strat_id, strat_id)
                 already_loaded.append(f"{name}[{mode}]")
                 return
 
@@ -467,6 +486,20 @@ def start():
                     loaded_names.append(f"GammaBlast[{'P' if is_paper else 'L'}]")
                 except Exception as e:
                     logger.error(f"Failed to load Gamma Blast: {e}")
+
+            elif strat_id == "zscore_nifty":
+                try:
+                    from strategy.zscore_nifty_strategy import NiftyZScoreStrategy, ZScoreStrategyParams
+                    s3 = NiftyZScoreStrategy(
+                        access_token=ACCESS_TOKEN,
+                        client_id=CLIENT_ID,
+                        params=ZScoreStrategyParams(),
+                        paper_trade=is_paper,
+                    )
+                    active_strategies.append(s3)
+                    loaded_names.append(f"ZScore[{'P' if is_paper else 'L'}]")
+                except Exception as e:
+                    logger.error(f"Failed to load ZScore: {e}")
 
         for s in live_strategies:
             append_strategy(s, False)
@@ -624,6 +657,46 @@ def get_positions():
         return jsonify({"status": "success", "data": positions})
     except Exception as e:
         logger.error(f"Positions error: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/api/strategies', methods=['GET'])
+@login_required
+def get_strategies():
+    """Return all Strategy__c records from Salesforce (Id + Strategy_Name__c + Description__c)."""
+    try:
+        from simple_salesforce import Salesforce
+        sf_instance = (os.getenv("SF_INSTANCE") or "").strip()
+        if sf_instance.startswith("https://"):
+            sf_instance = sf_instance[len("https://"):]
+        elif sf_instance.startswith("http://"):
+            sf_instance = sf_instance[len("http://"):]
+        sf_instance = sf_instance.rstrip("/")
+
+        sf_kwargs = {
+            "username": os.getenv("SF_USERNAME"),
+            "password": os.getenv("SF_PASSWORD"),
+            "security_token": os.getenv("SF_SECURITY_TOKEN", ""),
+            "version": os.getenv("SF_API_VERSION", "59.0"),
+        }
+        if sf_instance:
+            sf_kwargs["instance"] = sf_instance
+        else:
+            sf_kwargs["domain"] = os.getenv("SF_DOMAIN", "login")
+
+        sf = Salesforce(**sf_kwargs)
+        result = sf.query("SELECT Id, Strategy_Name__c, Description__c FROM Strategy__c ORDER BY Strategy_Name__c ASC")
+        strategies = [
+            {
+                "id": r["Id"],
+                "name": r["Strategy_Name__c"],
+                "description": r.get("Description__c") or "",
+            }
+            for r in result.get("records", [])
+        ]
+        return jsonify({"status": "success", "strategies": strategies})
+    except Exception as e:
+        logger.error("Failed fetching strategies from Salesforce: %s", e)
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
@@ -895,10 +968,10 @@ def test_strategy():
     strategy = data.get('strategy', 'gamma_blast')
     
     # Handle 'ALL' by running all strategies
-    strategies_to_run = ['gamma_blast', 'v4_gamma'] if strategy == 'ALL' else [strategy]
+    strategies_to_run = ['gamma_blast', 'v4_gamma', 'zscore_nifty'] if strategy == 'ALL' else [strategy]
     
     # Validate strategy names
-    valid_strategies = ['gamma_blast', 'v4_gamma']
+    valid_strategies = ['gamma_blast', 'v4_gamma', 'zscore_nifty']
     for strat in strategies_to_run:
         if strat not in valid_strategies:
             return jsonify({

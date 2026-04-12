@@ -66,6 +66,8 @@ class BacktestOrchestrator:
                 return self._run_gamma_blast()
             elif strategy_name == "v4_gamma":
                 return self._run_v4_gamma(**kwargs)
+            elif strategy_name == "zscore_nifty":
+                return self._run_zscore_nifty(**kwargs)
             else:
                 logger.error(f"Unknown strategy: {strategy_name}")
                 return {"error": f"Unknown strategy: {strategy_name}"}
@@ -119,6 +121,89 @@ class BacktestOrchestrator:
             logger.error(f"V4 Gamma execution failed: {e}", exc_info=True)
             return {"error": str(e)}
 
+    def _run_zscore_nifty(self, **kwargs):
+        """Execute Z-Score Nifty mean-reversion strategy backtest."""
+        import pandas as pd
+        try:
+            from backtest_v4 import V4Backtester
+            from backtest.zscore_nifty_backtester import NiftyZScoreBacktester, ZScoreParams
+
+            start_date = kwargs.get('start_date')
+            end_date = kwargs.get('end_date')
+            capital = float(kwargs.get('capital', 500000))
+
+            # Default: last 52 calendar weeks
+            if not end_date:
+                end_date = datetime.now().strftime("%Y-%m-%d")
+            if not start_date:
+                start_date = (datetime.now() - pd.Timedelta(weeks=52)).strftime("%Y-%m-%d")
+
+            trading_days = pd.bdate_range(start=start_date, end=end_date)
+            logger.info(f"ZScore backtest: {len(trading_days)} trading days ({start_date} → {end_date})")
+
+            fetcher = V4Backtester()
+            frames = []
+            for day in trading_days:
+                date_str = day.strftime("%Y-%m-%d")
+                df_day = fetcher.fetch_dhan_5min_data(date_str)
+                if df_day is not None and not df_day.empty:
+                    frames.append(df_day)
+
+            if not frames:
+                return {"error": "No NIFTY spot data fetched for the given date range"}
+
+            df_all = pd.concat(frames).sort_index()
+            logger.info(f"ZScore: fetched {len(df_all)} total 5-min bars")
+
+            params = ZScoreParams(initial_capital=capital)
+            bt = NiftyZScoreBacktester(params=params)
+            bt.run(df_all, option_fetcher=fetcher.option_fetcher)
+
+            # Normalise zscore results to the format expected by sync_to_salesforce
+            normalised = []
+            params_str = (
+                f"lookback={params.lookback}|entry_z={params.entry_z}|exit_z={params.exit_z}|"
+                f"stop_z={params.stop_z}|qty={params.qty}|adx_filter={params.use_adx_filter}|"
+                f"max_adx={params.max_adx}|max_loss_per_trade={params.max_loss_per_trade}|"
+                f"max_daily_loss={params.max_daily_loss}|max_trades_per_day={params.max_trades_per_day}"
+            )
+            for r in bt.results:
+                is_long = r["Action"] == "LONG"
+                normalised.append({
+                    "Date": r["Date"],
+                    "Entry_Time": r["Entry_Time"],
+                    "Exit_Time": r["Exit_Time"],
+                    "Option_Type": r.get("Option_Type", "NIFTY SPOT"),
+                    "Action": r["Action"],
+                    "Qty": r["Qty"],
+                    "Buy_Price": r["Entry_Price"],
+                    "Peak_Price": None,
+                    "Sell_Price": r["Exit_Price"],
+                    "Reason": r["Reason"],
+                    "Win": r["Win"],
+                    "PNL": r["PNL"],
+                    "ROI%": r["Capital_ROI%"],
+                    "Capital_ROI%": r["Capital_ROI%"],
+                    "Strike": r.get("Strike", f"Z{r['ZScore']}"),
+                    "Parameters": params_str,
+                })
+
+            self.results = normalised
+            summary = bt.summary()
+            logger.info(f"ZScore backtest completed: {summary['total_trades']} trades, PNL={summary['total_pnl']}")
+            return {
+                "status": "success",
+                "strategy": "zscore_nifty",
+                "total_trades": summary["total_trades"],
+                "win_rate": summary["win_rate"],
+                "total_pnl": summary["total_pnl"],
+                "return_pct": summary["return_pct"],
+                "message": f"Z-Score Nifty backtest completed: {summary['total_trades']} trades, PNL ₹{summary['total_pnl']:,.0f}"
+            }
+        except Exception as e:
+            logger.error(f"ZScore Nifty execution failed: {e}", exc_info=True)
+            return {"error": str(e)}
+
     def sync_to_salesforce(self, results=None, strategy_name=None):
         """
         Sync backtest results to Salesforce.
@@ -141,6 +226,21 @@ class BacktestOrchestrator:
             return {"status": "error", "message": "Salesforce connection failed"}
 
         run_ts = datetime.utcnow().strftime("%Y-%m-%d")
+
+        # Resolve Strategy__c lookup Id for this strategy_name
+        strategy_sf_id = None
+        try:
+            res = sf.query(
+                f"SELECT Id FROM Strategy__c WHERE Strategy_Name__c = '{strategy_name}' LIMIT 1"
+            )
+            records = res.get("records", [])
+            if records:
+                strategy_sf_id = records[0]["Id"]
+                logger.info("Resolved Strategy__c Id: %s → %s", strategy_name, strategy_sf_id)
+            else:
+                logger.warning("Strategy__c record not found for: %s — lookup field will be blank", strategy_name)
+        except Exception as exc:
+            logger.warning("Could not resolve Strategy__c Id: %s", exc)
 
         def _to_sf_datetime(date_str, time_str):
             """Convert IST time to UTC datetime for Salesforce."""
@@ -175,6 +275,8 @@ class BacktestOrchestrator:
                 "PnL_INR__c": float(r.get("PNL", 0)) if r.get("PNL") else None,
                 "Parameters__c": str(r.get("Parameters", "")),
             }
+            if strategy_sf_id:
+                record["Strategy__c"] = strategy_sf_id
             trade_records.append(record)
 
         try:

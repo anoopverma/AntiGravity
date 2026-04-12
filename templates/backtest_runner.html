@@ -35,8 +35,6 @@
                     <label>Strategy</label>
                     <select id="strategy-select" onchange="onStrategyChange()">
                         <option value="ALL">All Strategies</option>
-                        <option value="v4_gamma">V4 Gamma</option>
-                        <option value="gamma_blast">Gamma Blast</option>
                     </select>
                     <div id="strategy-meta" style="margin-top:0.6rem"></div>
                 </div>
@@ -196,6 +194,11 @@
                 badge: "badge-green",
                 desc: "An aggressive 48-week historical sweep that scales on momentum bursts across 5-minute ticks. Executes directional moves and captures expansion straddles."
             },
+            zscore_nifty: {
+                label: 'Z-Score Nifty',
+                badge: 'badge-v4',
+                desc: 'Mean-reversion on NIFTY spot (13:30–15:00). ADX filter + rupee stop. Profit factor 12.78 over 1 year (27 trades, 70% win rate, +₹53K, +10.64% ROI).'
+            },
         };
 
         function log(msg, cls = 'log-info') {
@@ -215,6 +218,43 @@
         // Global store for all fetched rows
         let _allData = [];
         let _isBacktestRequestInFlight = false;
+        // Maps strategy_name -> Salesforce Strategy__c Id
+        let _sfStrategyIds = {};
+
+        async function loadStrategies() {
+            try {
+                const res = await fetch('/api/strategies');
+                const data = await res.json();
+                if (!res.ok || data.status !== 'success') return;
+
+                const select = document.getElementById('strategy-select');
+                // Remove any previously added dynamic options (keep ALL)
+                while (select.options.length > 1) select.remove(1);
+
+                data.strategies.forEach(s => {
+                    _sfStrategyIds[s.name] = s.id;
+
+                    // Merge into STRATEGIES metadata (prefer existing badge/desc)
+                    if (!STRATEGIES[s.name]) {
+                        STRATEGIES[s.name] = {
+                            label: s.name,
+                            badge: 'badge-stg',
+                            desc: s.description || `Salesforce Strategy: ${s.name}`,
+                        };
+                    }
+
+                    const opt = document.createElement('option');
+                    opt.value = s.name;
+                    opt.textContent = STRATEGIES[s.name].label || s.name;
+                    select.appendChild(opt);
+                });
+
+                // Trigger meta display for default selection
+                onStrategyChange();
+            } catch (e) {
+                console.warn('Could not load strategies from Salesforce:', e);
+            }
+        }
 
         async function fetchBacktests() {
             try {
@@ -765,6 +805,7 @@
         }
 
         // Auto-load latest run data on page load
+        loadStrategies();
         fetchBacktests();
 
         // Set end-date to current date
