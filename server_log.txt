@@ -1812,3 +1812,430 @@
 2026-04-12 02:41:47,877 - INFO - 127.0.0.1 - - [12/Apr/2026 02:41:47] "GET /api/backtests HTTP/1.1" 200 -
 2026-04-12 02:41:59,293 - INFO - 127.0.0.1 - - [12/Apr/2026 02:41:59] "GET /api/backtests HTTP/1.1" 200 -
 2026-04-12 02:42:16,490 - INFO - 127.0.0.1 - - [12/Apr/2026 02:42:16] "GET /api/backtests HTTP/1.1" 200 -
+2026-04-12 23:27:34,006 - INFO - Dhan client initialised successfully via Environment Access Token.
+2026-04-12 23:27:34,293 - WARNING - Could not validate trading day near 2026-04-14; falling back to candidate.
+2026-04-12 23:27:34,539 - WARNING - Could not validate trading day near 2026-04-28; falling back to candidate.
+2026-04-12 23:27:34,760 - WARNING - Could not validate trading day near 2026-04-16; falling back to candidate.
+2026-04-12 23:27:34,977 - WARNING - Could not validate trading day near 2026-04-28; falling back to candidate.
+2026-04-12 23:27:34,977 - INFO - Auto-detected next Nifty expiry: 2026-04-14
+2026-04-12 23:27:34,977 - INFO - Engine configured. Standing by for start.
+2026-04-12 23:27:35,018 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5002
+ * Running on http://192.168.1.10:5002
+2026-04-12 23:27:35,019 - INFO - [33mPress CTRL+C to quit[0m
+2026-04-12 23:28:06,062 - INFO - 127.0.0.1 - - [12/Apr/2026 23:28:06] "[32mGET / HTTP/1.1[0m" 302 -
+2026-04-12 23:28:06,097 - INFO - 127.0.0.1 - - [12/Apr/2026 23:28:06] "GET /login HTTP/1.1" 200 -
+2026-04-12 23:28:06,534 - INFO - 127.0.0.1 - - [12/Apr/2026 23:28:06] "[36mGET /static/css/main.css HTTP/1.1[0m" 304 -
+2026-04-12 23:28:06,740 - INFO - 127.0.0.1 - - [12/Apr/2026 23:28:06] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+2026-04-12 23:28:08,681 - INFO - 127.0.0.1 - - [12/Apr/2026 23:28:08] "[32mPOST /login HTTP/1.1[0m" 302 -
+2026-04-12 23:28:08,729 - INFO - 127.0.0.1 - - [12/Apr/2026 23:28:08] "GET / HTTP/1.1" 200 -
+2026-04-12 23:28:08,747 - INFO - 127.0.0.1 - - [12/Apr/2026 23:28:08] "[36mGET /static/css/main.css HTTP/1.1[0m" 304 -
+2026-04-12 23:28:08,756 - INFO - 127.0.0.1 - - [12/Apr/2026 23:28:08] "GET /api/status HTTP/1.1" 200 -
+2026-04-12 23:28:08,759 - INFO - 127.0.0.1 - - [12/Apr/2026 23:28:08] "GET /api/system_logs HTTP/1.1" 200 -
+2026-04-12 23:28:31,925 - INFO - 127.0.0.1 - - [12/Apr/2026 23:28:31] "GET /backtest HTTP/1.1" 200 -
+2026-04-12 23:28:31,953 - INFO - 127.0.0.1 - - [12/Apr/2026 23:28:31] "[36mGET /static/css/main.css HTTP/1.1[0m" 304 -
+2026-04-12 23:28:34,223 - INFO - 127.0.0.1 - - [12/Apr/2026 23:28:34] "GET /api/backtests HTTP/1.1" 200 -
+2026-04-12 23:29:02,631 - INFO - Running strategy: v4_gamma
+2026-04-12 23:29:02,631 - INFO - Starting v4_gamma backtest...
+2026-04-12 23:29:02,797 - INFO - Starting V4 Trailing SL Strategy Backtest for Last 48 Nifty Expiry Days
+2026-04-12 23:29:05,156 - WARNING - Dhan intraday fetch failed for 2025-05-13: 401 Client Error:  for url: https://api.dhan.co/v2/charts/intraday
+2026-04-12 23:29:06,160 - ERROR - YFinance fallback failed for 2025-05-13: No module named 'yfinance'
+2026-04-12 23:29:08,367 - WARNING - Dhan intraday fetch failed for 2025-05-20: 401 Client Error:  for url: https://api.dhan.co/v2/charts/intraday
+2026-04-12 23:29:09,369 - ERROR - YFinance fallback failed for 2025-05-20: No module named 'yfinance'
+2026-04-12 23:29:11,591 - WARNING - Dhan intraday fetch failed for 2025-05-27: 401 Client Error:  for url: https://api.dhan.co/v2/charts/intraday
+2026-04-12 23:29:12,598 - ERROR - YFinance fallback failed for 2025-05-27: No module named 'yfinance'
+2026-04-12 23:29:14,827 - WARNING - Dhan intraday fetch failed for 2025-06-03: 401 Client Error:  for url: https://api.dhan.co/v2/charts/intraday
+2026-04-12 23:29:15,829 - ERROR - YFinance fallback failed for 2025-06-03: No module named 'yfinance'
+2026-04-12 23:29:18,043 - WARNING - Dhan intraday fetch failed for 2025-06-10: 401 Client Error:  for url: https://api.dhan.co/v2/charts/intraday
+2026-04-12 23:29:19,048 - ERROR - YFinance fallback failed for 2025-06-10: No module named 'yfinance'
+2026-04-12 23:29:21,289 - WARNING - Dhan intraday fetch failed for 2025-06-17: 401 Client Error:  for url: https://api.dhan.co/v2/charts/intraday
+2026-04-12 23:29:22,296 - ERROR - YFinance fallback failed for 2025-06-17: No module named 'yfinance'
+2026-04-12 23:29:24,529 - WARNING - Dhan intraday fetch failed for 2025-06-24: 401 Client Error:  for url: https://api.dhan.co/v2/charts/intraday
+2026-04-12 23:29:25,534 - ERROR - YFinance fallback failed for 2025-06-24: No module named 'yfinance'
+2026-04-12 23:29:27,756 - WARNING - Dhan intraday fetch failed for 2025-07-01: 401 Client Error:  for url: https://api.dhan.co/v2/charts/intraday
+2026-04-12 23:29:28,761 - ERROR - YFinance fallback failed for 2025-07-01: No module named 'yfinance'
+2026-04-12 23:29:31,034 - WARNING - Dhan intraday fetch failed for 2025-07-08: 401 Client Error:  for url: https://api.dhan.co/v2/charts/intraday
+2026-04-12 23:29:32,038 - ERROR - YFinance fallback failed for 2025-07-08: No module named 'yfinance'
+2026-04-12 23:29:34,264 - WARNING - Dhan intraday fetch failed for 2025-07-15: 401 Client Error:  for url: https://api.dhan.co/v2/charts/intraday
+2026-04-12 23:29:35,267 - ERROR - YFinance fallback failed for 2025-07-15: No module named 'yfinance'
+2026-04-12 23:29:37,477 - WARNING - Dhan intraday fetch failed for 2025-07-22: 401 Client Error:  for url: https://api.dhan.co/v2/charts/intraday
+2026-04-12 23:29:38,480 - ERROR - YFinance fallback failed for 2025-07-22: No module named 'yfinance'
+2026-04-12 23:29:40,695 - WARNING - Dhan intraday fetch failed for 2025-07-29: 401 Client Error:  for url: https://api.dhan.co/v2/charts/intraday
+2026-04-12 23:29:41,697 - ERROR - YFinance fallback failed for 2025-07-29: No module named 'yfinance'
+2026-04-12 23:29:43,914 - WARNING - Dhan intraday fetch failed for 2025-08-05: 401 Client Error:  for url: https://api.dhan.co/v2/charts/intraday
+2026-04-12 23:29:44,920 - ERROR - YFinance fallback failed for 2025-08-05: No module named 'yfinance'
+2026-04-12 23:29:47,147 - WARNING - Dhan intraday fetch failed for 2025-08-12: 401 Client Error:  for url: https://api.dhan.co/v2/charts/intraday
+2026-04-12 23:29:48,153 - ERROR - YFinance fallback failed for 2025-08-12: No module named 'yfinance'
+2026-04-12 23:29:50,386 - WARNING - Dhan intraday fetch failed for 2025-08-19: 401 Client Error:  for url: https://api.dhan.co/v2/charts/intraday
+2026-04-12 23:29:51,387 - ERROR - YFinance fallback failed for 2025-08-19: No module named 'yfinance'
+2026-04-12 23:29:53,605 - WARNING - Dhan intraday fetch failed for 2025-08-26: 401 Client Error:  for url: https://api.dhan.co/v2/charts/intraday
+2026-04-12 23:29:54,606 - ERROR - YFinance fallback failed for 2025-08-26: No module named 'yfinance'
+2026-04-12 23:29:56,831 - WARNING - Dhan intraday fetch failed for 2025-09-02: 401 Client Error:  for url: https://api.dhan.co/v2/charts/intraday
+2026-04-12 23:29:57,836 - ERROR - YFinance fallback failed for 2025-09-02: No module named 'yfinance'
+2026-04-12 23:30:00,060 - WARNING - Dhan intraday fetch failed for 2025-09-09: 401 Client Error:  for url: https://api.dhan.co/v2/charts/intraday
+2026-04-12 23:30:01,065 - ERROR - YFinance fallback failed for 2025-09-09: No module named 'yfinance'
+2026-04-12 23:30:03,293 - WARNING - Dhan intraday fetch failed for 2025-09-16: 401 Client Error:  for url: https://api.dhan.co/v2/charts/intraday
+2026-04-12 23:30:04,297 - ERROR - YFinance fallback failed for 2025-09-16: No module named 'yfinance'
+2026-04-12 23:30:06,504 - WARNING - Dhan intraday fetch failed for 2025-09-23: 401 Client Error:  for url: https://api.dhan.co/v2/charts/intraday
+2026-04-12 23:30:07,506 - ERROR - YFinance fallback failed for 2025-09-23: No module named 'yfinance'
+2026-04-12 23:30:09,726 - WARNING - Dhan intraday fetch failed for 2025-09-30: 401 Client Error:  for url: https://api.dhan.co/v2/charts/intraday
+2026-04-12 23:30:10,732 - ERROR - YFinance fallback failed for 2025-09-30: No module named 'yfinance'
+2026-04-12 23:30:12,930 - WARNING - Dhan intraday fetch failed for 2025-10-07: 401 Client Error:  for url: https://api.dhan.co/v2/charts/intraday
+2026-04-12 23:30:13,936 - ERROR - YFinance fallback failed for 2025-10-07: No module named 'yfinance'
+2026-04-12 23:30:16,167 - WARNING - Dhan intraday fetch failed for 2025-10-14: 401 Client Error:  for url: https://api.dhan.co/v2/charts/intraday
+2026-04-12 23:30:17,169 - ERROR - YFinance fallback failed for 2025-10-14: No module named 'yfinance'
+2026-04-12 23:30:19,395 - WARNING - Dhan intraday fetch failed for 2025-10-21: 401 Client Error:  for url: https://api.dhan.co/v2/charts/intraday
+2026-04-12 23:30:20,406 - ERROR - YFinance fallback failed for 2025-10-21: No module named 'yfinance'
+2026-04-12 23:30:22,645 - WARNING - Dhan intraday fetch failed for 2025-10-28: 401 Client Error:  for url: https://api.dhan.co/v2/charts/intraday
+2026-04-12 23:30:23,650 - ERROR - YFinance fallback failed for 2025-10-28: No module named 'yfinance'
+2026-04-12 23:30:25,873 - WARNING - Dhan intraday fetch failed for 2025-11-04: 401 Client Error:  for url: https://api.dhan.co/v2/charts/intraday
+2026-04-12 23:30:26,879 - ERROR - YFinance fallback failed for 2025-11-04: No module named 'yfinance'
+2026-04-12 23:30:29,092 - WARNING - Dhan intraday fetch failed for 2025-11-11: 401 Client Error:  for url: https://api.dhan.co/v2/charts/intraday
+2026-04-12 23:30:30,097 - ERROR - YFinance fallback failed for 2025-11-11: No module named 'yfinance'
+2026-04-12 23:30:32,309 - WARNING - Dhan intraday fetch failed for 2025-11-18: 401 Client Error:  for url: https://api.dhan.co/v2/charts/intraday
+2026-04-12 23:30:33,313 - ERROR - YFinance fallback failed for 2025-11-18: No module named 'yfinance'
+2026-04-12 23:30:35,541 - WARNING - Dhan intraday fetch failed for 2025-11-25: 401 Client Error:  for url: https://api.dhan.co/v2/charts/intraday
+2026-04-12 23:30:36,545 - ERROR - YFinance fallback failed for 2025-11-25: No module named 'yfinance'
+2026-04-12 23:30:38,751 - WARNING - Dhan intraday fetch failed for 2025-12-02: 401 Client Error:  for url: https://api.dhan.co/v2/charts/intraday
+2026-04-12 23:30:39,757 - ERROR - YFinance fallback failed for 2025-12-02: No module named 'yfinance'
+2026-04-12 23:30:41,988 - WARNING - Dhan intraday fetch failed for 2025-12-09: 401 Client Error:  for url: https://api.dhan.co/v2/charts/intraday
+2026-04-12 23:30:42,993 - ERROR - YFinance fallback failed for 2025-12-09: No module named 'yfinance'
+2026-04-12 23:30:45,233 - WARNING - Dhan intraday fetch failed for 2025-12-16: 401 Client Error:  for url: https://api.dhan.co/v2/charts/intraday
+2026-04-12 23:30:46,238 - ERROR - YFinance fallback failed for 2025-12-16: No module named 'yfinance'
+2026-04-12 23:30:48,493 - WARNING - Dhan intraday fetch failed for 2025-12-23: 401 Client Error:  for url: https://api.dhan.co/v2/charts/intraday
+2026-04-12 23:30:49,501 - ERROR - YFinance fallback failed for 2025-12-23: No module named 'yfinance'
+2026-04-12 23:30:51,723 - WARNING - Dhan intraday fetch failed for 2025-12-30: 401 Client Error:  for url: https://api.dhan.co/v2/charts/intraday
+2026-04-12 23:30:52,728 - ERROR - YFinance fallback failed for 2025-12-30: No module named 'yfinance'
+2026-04-12 23:30:54,941 - WARNING - Dhan intraday fetch failed for 2026-01-06: 401 Client Error:  for url: https://api.dhan.co/v2/charts/intraday
+2026-04-12 23:30:55,948 - ERROR - YFinance fallback failed for 2026-01-06: No module named 'yfinance'
+2026-04-12 23:30:58,177 - WARNING - Dhan intraday fetch failed for 2026-01-13: 401 Client Error:  for url: https://api.dhan.co/v2/charts/intraday
+2026-04-12 23:30:59,179 - ERROR - YFinance fallback failed for 2026-01-13: No module named 'yfinance'
+2026-04-12 23:31:01,376 - WARNING - Dhan intraday fetch failed for 2026-01-20: 401 Client Error:  for url: https://api.dhan.co/v2/charts/intraday
+2026-04-12 23:31:02,381 - ERROR - YFinance fallback failed for 2026-01-20: No module named 'yfinance'
+2026-04-12 23:31:04,638 - WARNING - Dhan intraday fetch failed for 2026-01-27: 401 Client Error:  for url: https://api.dhan.co/v2/charts/intraday
+2026-04-12 23:31:05,644 - ERROR - YFinance fallback failed for 2026-01-27: No module named 'yfinance'
+2026-04-12 23:31:07,861 - WARNING - Dhan intraday fetch failed for 2026-02-03: 401 Client Error:  for url: https://api.dhan.co/v2/charts/intraday
+2026-04-12 23:31:08,865 - ERROR - YFinance fallback failed for 2026-02-03: No module named 'yfinance'
+2026-04-12 23:31:11,071 - WARNING - Dhan intraday fetch failed for 2026-02-10: 401 Client Error:  for url: https://api.dhan.co/v2/charts/intraday
+2026-04-12 23:31:12,073 - ERROR - YFinance fallback failed for 2026-02-10: No module named 'yfinance'
+2026-04-12 23:31:14,285 - WARNING - Dhan intraday fetch failed for 2026-02-17: 401 Client Error:  for url: https://api.dhan.co/v2/charts/intraday
+2026-04-12 23:31:15,287 - ERROR - YFinance fallback failed for 2026-02-17: No module named 'yfinance'
+2026-04-12 23:31:17,505 - WARNING - Dhan intraday fetch failed for 2026-02-24: 401 Client Error:  for url: https://api.dhan.co/v2/charts/intraday
+2026-04-12 23:31:18,509 - ERROR - YFinance fallback failed for 2026-02-24: No module named 'yfinance'
+2026-04-12 23:31:20,743 - WARNING - Dhan intraday fetch failed for 2026-03-03: 401 Client Error:  for url: https://api.dhan.co/v2/charts/intraday
+2026-04-12 23:31:21,749 - ERROR - YFinance fallback failed for 2026-03-03: No module named 'yfinance'
+2026-04-12 23:31:23,964 - WARNING - Dhan intraday fetch failed for 2026-03-10: 401 Client Error:  for url: https://api.dhan.co/v2/charts/intraday
+2026-04-12 23:31:24,969 - ERROR - YFinance fallback failed for 2026-03-10: No module named 'yfinance'
+2026-04-12 23:31:27,189 - WARNING - Dhan intraday fetch failed for 2026-03-17: 401 Client Error:  for url: https://api.dhan.co/v2/charts/intraday
+2026-04-12 23:31:28,195 - ERROR - YFinance fallback failed for 2026-03-17: No module named 'yfinance'
+2026-04-12 23:31:30,573 - WARNING - Dhan intraday fetch failed for 2026-03-24: 401 Client Error:  for url: https://api.dhan.co/v2/charts/intraday
+2026-04-12 23:31:31,580 - ERROR - YFinance fallback failed for 2026-03-24: No module named 'yfinance'
+2026-04-12 23:31:33,789 - WARNING - Dhan intraday fetch failed for 2026-03-31: 401 Client Error:  for url: https://api.dhan.co/v2/charts/intraday
+2026-04-12 23:31:34,790 - ERROR - YFinance fallback failed for 2026-03-31: No module named 'yfinance'
+2026-04-12 23:31:37,014 - WARNING - Dhan intraday fetch failed for 2026-04-07: 401 Client Error:  for url: https://api.dhan.co/v2/charts/intraday
+2026-04-12 23:31:38,020 - ERROR - YFinance fallback failed for 2026-04-07: No module named 'yfinance'
+2026-04-12 23:31:38,023 - INFO - V4 Gamma backtest completed: 0 trades
+2026-04-12 23:31:38,024 - WARNING - No results to sync
+2026-04-12 23:31:38,029 - INFO - 127.0.0.1 - - [12/Apr/2026 23:31:38] "POST /api/test-strategy HTTP/1.1" 200 -
+2026-04-12 23:31:41,526 - INFO - 127.0.0.1 - - [12/Apr/2026 23:31:41] "GET /api/backtests HTTP/1.1" 200 -
+2026-04-12 23:34:51,457 - INFO - Dhan client initialised successfully via Environment Access Token.
+2026-04-12 23:34:51,761 - INFO - Holiday detected on 2026-04-14 → shifted back to 2026-04-13
+2026-04-12 23:34:51,964 - INFO - Auto-detected next Nifty expiry: 2026-04-13
+2026-04-12 23:34:51,964 - INFO - Engine configured. Standing by for start.
+2026-04-12 23:35:36,408 - INFO - Dhan client initialised successfully via Environment Access Token.
+2026-04-12 23:35:36,621 - INFO - Holiday detected on 2026-04-14 → shifted back to 2026-04-13
+2026-04-12 23:35:36,839 - INFO - Auto-detected next Nifty expiry: 2026-04-13
+2026-04-12 23:35:36,839 - INFO - Engine configured. Standing by for start.
+2026-04-12 23:35:36,869 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5002
+ * Running on http://192.168.1.10:5002
+2026-04-12 23:35:36,869 - INFO - [33mPress CTRL+C to quit[0m
+2026-04-12 23:37:32,759 - INFO - 127.0.0.1 - - [12/Apr/2026 23:37:32] "GET / HTTP/1.1" 200 -
+2026-04-12 23:37:33,060 - INFO - 127.0.0.1 - - [12/Apr/2026 23:37:33] "[36mGET /static/css/main.css HTTP/1.1[0m" 304 -
+2026-04-12 23:37:33,074 - INFO - 127.0.0.1 - - [12/Apr/2026 23:37:33] "GET /api/status HTTP/1.1" 200 -
+2026-04-12 23:37:33,078 - INFO - 127.0.0.1 - - [12/Apr/2026 23:37:33] "GET /api/system_logs HTTP/1.1" 200 -
+2026-04-12 23:37:35,414 - INFO - 127.0.0.1 - - [12/Apr/2026 23:37:35] "GET /backtest HTTP/1.1" 200 -
+2026-04-12 23:37:35,434 - INFO - 127.0.0.1 - - [12/Apr/2026 23:37:35] "[36mGET /static/css/main.css HTTP/1.1[0m" 304 -
+2026-04-12 23:37:37,506 - INFO - 127.0.0.1 - - [12/Apr/2026 23:37:37] "GET /api/backtests HTTP/1.1" 200 -
+2026-04-12 23:37:40,783 - INFO - 127.0.0.1 - - [12/Apr/2026 23:37:40] "GET /backtest HTTP/1.1" 200 -
+2026-04-12 23:37:40,804 - INFO - 127.0.0.1 - - [12/Apr/2026 23:37:40] "[36mGET /static/css/main.css HTTP/1.1[0m" 304 -
+2026-04-12 23:37:42,077 - INFO - 127.0.0.1 - - [12/Apr/2026 23:37:42] "GET /api/backtests HTTP/1.1" 200 -
+2026-04-12 23:37:42,274 - INFO - 127.0.0.1 - - [12/Apr/2026 23:37:42] "GET /backtest HTTP/1.1" 200 -
+2026-04-12 23:37:42,290 - INFO - 127.0.0.1 - - [12/Apr/2026 23:37:42] "[36mGET /static/css/main.css HTTP/1.1[0m" 304 -
+2026-04-12 23:37:43,561 - INFO - 127.0.0.1 - - [12/Apr/2026 23:37:43] "GET /api/backtests HTTP/1.1" 200 -
+2026-04-12 23:50:28,256 - INFO - Dhan client initialised successfully via Environment Access Token.
+2026-04-12 23:50:28,411 - INFO - Holiday detected on 2026-04-14 → shifted back to 2026-04-13
+2026-04-12 23:50:28,614 - INFO - Auto-detected next Nifty expiry: 2026-04-13
+2026-04-12 23:50:28,615 - INFO - Engine configured. Standing by for start.
+2026-04-12 23:50:28,644 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5002
+ * Running on http://192.168.1.10:5002
+2026-04-12 23:50:28,644 - INFO - [33mPress CTRL+C to quit[0m
+2026-04-12 23:50:58,140 - INFO - 127.0.0.1 - - [12/Apr/2026 23:50:58] "GET / HTTP/1.1" 200 -
+2026-04-12 23:50:58,747 - INFO - 127.0.0.1 - - [12/Apr/2026 23:50:58] "[36mGET /static/css/main.css HTTP/1.1[0m" 304 -
+2026-04-12 23:50:58,758 - INFO - 127.0.0.1 - - [12/Apr/2026 23:50:58] "GET /api/status HTTP/1.1" 200 -
+2026-04-12 23:50:58,760 - INFO - 127.0.0.1 - - [12/Apr/2026 23:50:58] "GET /api/system_logs HTTP/1.1" 200 -
+2026-04-12 23:51:00,586 - INFO - 127.0.0.1 - - [12/Apr/2026 23:51:00] "GET /backtest HTTP/1.1" 200 -
+2026-04-12 23:51:00,613 - INFO - 127.0.0.1 - - [12/Apr/2026 23:51:00] "[36mGET /static/css/main.css HTTP/1.1[0m" 304 -
+2026-04-12 23:51:02,965 - INFO - 127.0.0.1 - - [12/Apr/2026 23:51:02] "GET /api/strategies HTTP/1.1" 200 -
+2026-04-12 23:51:03,005 - INFO - 127.0.0.1 - - [12/Apr/2026 23:51:03] "GET /api/backtests HTTP/1.1" 200 -
+2026-04-12 23:51:32,491 - INFO - Running strategy: zscore_nifty
+2026-04-12 23:51:32,491 - INFO - Starting zscore_nifty backtest...
+2026-04-12 23:51:32,688 - INFO - ZScore backtest: 72 trading days (2026-01-01 → 2026-04-12)
+2026-04-12 23:51:32,863 - INFO - Fetched 75 5-min bars from /charts/intraday for 2026-01-01
+2026-04-12 23:51:32,932 - INFO - Fetched 76 5-min bars from /charts/intraday for 2026-01-02
+2026-04-12 23:51:33,005 - INFO - Fetched 76 5-min bars from /charts/intraday for 2026-01-05
+2026-04-12 23:51:33,091 - INFO - Fetched 75 5-min bars from /charts/intraday for 2026-01-06
+2026-04-12 23:51:33,161 - INFO - Fetched 75 5-min bars from /charts/intraday for 2026-01-07
+2026-04-12 23:51:35,317 - INFO - Fetched 75 5-min bars from /charts/intraday for 2026-01-08
+2026-04-12 23:51:35,402 - INFO - Fetched 75 5-min bars from /charts/intraday for 2026-01-09
+2026-04-12 23:51:35,492 - INFO - Fetched 75 5-min bars from /charts/intraday for 2026-01-12
+2026-04-12 23:51:35,579 - INFO - Fetched 76 5-min bars from /charts/intraday for 2026-01-13
+2026-04-12 23:51:35,655 - INFO - Fetched 75 5-min bars from /charts/intraday for 2026-01-14
+2026-04-12 23:51:37,830 - WARNING - Empty intraday payload for 2026-01-15
+2026-04-12 23:51:37,831 - ERROR - YFinance fallback failed for 2026-01-15: No module named 'yfinance'
+2026-04-12 23:51:37,924 - INFO - Fetched 76 5-min bars from /charts/intraday for 2026-01-16
+2026-04-12 23:51:38,009 - INFO - Fetched 75 5-min bars from /charts/intraday for 2026-01-19
+2026-04-12 23:51:38,096 - INFO - Fetched 76 5-min bars from /charts/intraday for 2026-01-20
+2026-04-12 23:51:38,176 - INFO - Fetched 75 5-min bars from /charts/intraday for 2026-01-21
+2026-04-12 23:51:40,342 - INFO - Fetched 76 5-min bars from /charts/intraday for 2026-01-22
+2026-04-12 23:51:40,431 - INFO - Fetched 75 5-min bars from /charts/intraday for 2026-01-23
+2026-04-12 23:51:40,512 - WARNING - Empty intraday payload for 2026-01-26
+2026-04-12 23:51:40,513 - ERROR - YFinance fallback failed for 2026-01-26: No module named 'yfinance'
+2026-04-12 23:51:40,602 - INFO - Fetched 75 5-min bars from /charts/intraday for 2026-01-27
+2026-04-12 23:51:40,689 - INFO - Fetched 75 5-min bars from /charts/intraday for 2026-01-28
+2026-04-12 23:51:42,857 - INFO - Fetched 76 5-min bars from /charts/intraday for 2026-01-29
+2026-04-12 23:51:42,935 - INFO - Fetched 75 5-min bars from /charts/intraday for 2026-01-30
+2026-04-12 23:51:43,017 - INFO - Fetched 76 5-min bars from /charts/intraday for 2026-02-02
+2026-04-12 23:51:43,105 - INFO - Fetched 75 5-min bars from /charts/intraday for 2026-02-03
+2026-04-12 23:51:43,192 - INFO - Fetched 75 5-min bars from /charts/intraday for 2026-02-04
+2026-04-12 23:51:45,346 - INFO - Fetched 75 5-min bars from /charts/intraday for 2026-02-05
+2026-04-12 23:51:45,437 - INFO - Fetched 75 5-min bars from /charts/intraday for 2026-02-06
+2026-04-12 23:51:45,521 - INFO - Fetched 75 5-min bars from /charts/intraday for 2026-02-09
+2026-04-12 23:51:45,606 - INFO - Fetched 75 5-min bars from /charts/intraday for 2026-02-10
+2026-04-12 23:51:45,686 - INFO - Fetched 75 5-min bars from /charts/intraday for 2026-02-11
+2026-04-12 23:51:47,830 - INFO - Fetched 75 5-min bars from /charts/intraday for 2026-02-12
+2026-04-12 23:51:47,914 - INFO - Fetched 75 5-min bars from /charts/intraday for 2026-02-13
+2026-04-12 23:51:47,998 - INFO - Fetched 75 5-min bars from /charts/intraday for 2026-02-16
+2026-04-12 23:51:48,080 - INFO - Fetched 75 5-min bars from /charts/intraday for 2026-02-17
+2026-04-12 23:51:48,172 - INFO - Fetched 75 5-min bars from /charts/intraday for 2026-02-18
+2026-04-12 23:51:50,322 - INFO - Fetched 75 5-min bars from /charts/intraday for 2026-02-19
+2026-04-12 23:51:50,401 - INFO - Fetched 75 5-min bars from /charts/intraday for 2026-02-20
+2026-04-12 23:51:50,480 - INFO - Fetched 75 5-min bars from /charts/intraday for 2026-02-23
+2026-04-12 23:51:50,572 - INFO - Fetched 76 5-min bars from /charts/intraday for 2026-02-24
+2026-04-12 23:51:50,653 - INFO - Fetched 76 5-min bars from /charts/intraday for 2026-02-25
+2026-04-12 23:51:52,828 - INFO - Fetched 75 5-min bars from /charts/intraday for 2026-02-26
+2026-04-12 23:51:52,915 - INFO - Fetched 75 5-min bars from /charts/intraday for 2026-02-27
+2026-04-12 23:51:53,003 - INFO - Fetched 75 5-min bars from /charts/intraday for 2026-03-02
+2026-04-12 23:51:53,073 - WARNING - Empty intraday payload for 2026-03-03
+2026-04-12 23:51:53,074 - ERROR - YFinance fallback failed for 2026-03-03: No module named 'yfinance'
+2026-04-12 23:51:53,157 - INFO - Fetched 75 5-min bars from /charts/intraday for 2026-03-04
+2026-04-12 23:51:55,327 - INFO - Fetched 76 5-min bars from /charts/intraday for 2026-03-05
+2026-04-12 23:51:55,417 - INFO - Fetched 76 5-min bars from /charts/intraday for 2026-03-06
+2026-04-12 23:51:55,504 - INFO - Fetched 75 5-min bars from /charts/intraday for 2026-03-09
+2026-04-12 23:51:55,590 - INFO - Fetched 75 5-min bars from /charts/intraday for 2026-03-10
+2026-04-12 23:51:55,669 - INFO - Fetched 75 5-min bars from /charts/intraday for 2026-03-11
+2026-04-12 23:51:57,836 - INFO - Fetched 75 5-min bars from /charts/intraday for 2026-03-12
+2026-04-12 23:51:57,926 - INFO - Fetched 75 5-min bars from /charts/intraday for 2026-03-13
+2026-04-12 23:51:58,013 - INFO - Fetched 75 5-min bars from /charts/intraday for 2026-03-16
+2026-04-12 23:51:58,102 - INFO - Fetched 75 5-min bars from /charts/intraday for 2026-03-17
+2026-04-12 23:51:58,188 - INFO - Fetched 76 5-min bars from /charts/intraday for 2026-03-18
+2026-04-12 23:52:00,347 - INFO - Fetched 75 5-min bars from /charts/intraday for 2026-03-19
+2026-04-12 23:52:00,424 - INFO - Fetched 75 5-min bars from /charts/intraday for 2026-03-20
+2026-04-12 23:52:00,509 - INFO - Fetched 75 5-min bars from /charts/intraday for 2026-03-23
+2026-04-12 23:52:00,599 - INFO - Fetched 75 5-min bars from /charts/intraday for 2026-03-24
+2026-04-12 23:52:00,687 - INFO - Fetched 76 5-min bars from /charts/intraday for 2026-03-25
+2026-04-12 23:52:02,837 - WARNING - Empty intraday payload for 2026-03-26
+2026-04-12 23:52:02,838 - ERROR - YFinance fallback failed for 2026-03-26: No module named 'yfinance'
+2026-04-12 23:52:02,940 - INFO - Fetched 75 5-min bars from /charts/intraday for 2026-03-27
+2026-04-12 23:52:03,025 - INFO - Fetched 75 5-min bars from /charts/intraday for 2026-03-30
+2026-04-12 23:52:03,103 - WARNING - Empty intraday payload for 2026-03-31
+2026-04-12 23:52:03,104 - ERROR - YFinance fallback failed for 2026-03-31: No module named 'yfinance'
+2026-04-12 23:52:03,196 - INFO - Fetched 75 5-min bars from /charts/intraday for 2026-04-01
+2026-04-12 23:52:05,358 - INFO - Fetched 76 5-min bars from /charts/intraday for 2026-04-02
+2026-04-12 23:52:05,441 - WARNING - Empty intraday payload for 2026-04-03
+2026-04-12 23:52:05,441 - ERROR - YFinance fallback failed for 2026-04-03: No module named 'yfinance'
+2026-04-12 23:52:05,533 - INFO - Fetched 76 5-min bars from /charts/intraday for 2026-04-06
+2026-04-12 23:52:05,617 - INFO - Fetched 75 5-min bars from /charts/intraday for 2026-04-07
+2026-04-12 23:52:05,696 - INFO - Fetched 75 5-min bars from /charts/intraday for 2026-04-08
+2026-04-12 23:52:07,866 - INFO - Fetched 75 5-min bars from /charts/intraday for 2026-04-09
+2026-04-12 23:52:07,955 - INFO - Fetched 76 5-min bars from /charts/intraday for 2026-04-10
+2026-04-12 23:52:07,958 - INFO - ZScore: fetched 4967 total 5-min bars
+2026-04-12 23:52:08,078 - INFO - ZScore backtest completed: 348 trades, PNL=-195907.5
+2026-04-12 23:52:08,790 - INFO - Connected to Salesforce
+2026-04-12 23:52:09,536 - INFO - Resolved Strategy__c Id: zscore_nifty → a1hGA000007M0QNYA0
+2026-04-12 23:52:16,937 - INFO - -> SF SYNC: 348 trade rows saved to historical_backtests__c (0 failed).
+2026-04-12 23:52:16,940 - INFO - 127.0.0.1 - - [12/Apr/2026 23:52:16] "POST /api/test-strategy HTTP/1.1" 200 -
+2026-04-12 23:52:19,250 - INFO - 127.0.0.1 - - [12/Apr/2026 23:52:19] "GET /api/backtests HTTP/1.1" 200 -
+2026-04-12 23:52:29,056 - INFO - 127.0.0.1 - - [12/Apr/2026 23:52:29] "GET /api/backtests HTTP/1.1" 200 -
+2026-04-12 23:53:28,725 - INFO - 127.0.0.1 - - [12/Apr/2026 23:53:28] "POST /api/delete-backtest HTTP/1.1" 200 -
+2026-04-12 23:53:30,615 - INFO - 127.0.0.1 - - [12/Apr/2026 23:53:30] "GET /api/backtests HTTP/1.1" 200 -
+2026-04-12 23:53:42,565 - INFO - 127.0.0.1 - - [12/Apr/2026 23:53:42] "GET /api/backtests HTTP/1.1" 200 -
+2026-04-12 23:54:11,928 - INFO - Deleted 54 Salesforce backtest records (0 failed)
+2026-04-12 23:54:11,931 - INFO - 127.0.0.1 - - [12/Apr/2026 23:54:11] "POST /api/delete-backtest HTTP/1.1" 200 -
+2026-04-12 23:54:13,835 - INFO - 127.0.0.1 - - [12/Apr/2026 23:54:13] "GET /api/backtests HTTP/1.1" 200 -
+2026-04-12 23:54:19,077 - INFO - 127.0.0.1 - - [12/Apr/2026 23:54:19] "GET /api/backtests HTTP/1.1" 200 -
+2026-04-12 23:54:23,852 - INFO - Running strategy: gamma_blast
+2026-04-12 23:54:23,852 - INFO - Starting gamma_blast backtest...
+2026-04-12 23:54:23,880 - INFO - Loaded disk cache: 96 entries from /tmp/gamma_option_cache.pkl
+2026-04-12 23:54:23,881 - INFO - Gamma Spike Backtest — 48 Nifty expiry days
+2026-04-12 23:54:23,881 - INFO - Params: SELL|leg_spike=120%|target=35%|sl=40%|min_sell=20.0|bench=09:20|entry=09:30-11:30
+2026-04-12 23:54:23,881 - INFO - --- 2025-05-13 ---
+2026-04-12 23:54:23,889 - INFO -   Benchmark 09:20 | CE:176.35 PE:203.90 Spot≈24800.0
+2026-04-12 23:54:23,889 - INFO - --- 2025-05-20 ---
+2026-04-12 23:54:23,896 - INFO -   Benchmark 09:20 | CE:142.05 PE:129.60 Spot≈24950.0
+2026-04-12 23:54:23,896 - INFO - --- 2025-05-27 ---
+2026-04-12 23:54:23,901 - INFO -   Benchmark 09:20 | CE:226.05 PE:211.20 Spot≈24800.0
+2026-04-12 23:54:23,901 - INFO - --- 2025-06-03 ---
+2026-04-12 23:54:23,907 - INFO -   Benchmark 09:20 | CE:228.50 PE:193.85 Spot≈24650.0
+2026-04-12 23:54:23,907 - INFO - --- 2025-06-10 ---
+2026-04-12 23:54:23,912 - INFO -   Benchmark 09:20 | CE:103.60 PE:115.85 Spot≈25150.0
+2026-04-12 23:54:23,912 - INFO -   SELL C @ 133.20 | CE+28.6% PE+-7.3% | Target≤86.58 | SL≥186.48 | 09:35
+2026-04-12 23:54:23,912 - INFO -   BUY BACK @ 85.55 | PnL: 61,945 | Target Hit
+2026-04-12 23:54:23,912 - INFO - --- 2025-06-17 ---
+2026-04-12 23:54:23,951 - INFO -   Benchmark 09:20 | CE:120.25 PE:136.30 Spot≈24900.0
+2026-04-12 23:54:23,951 - INFO - --- 2025-06-24 ---
+2026-04-12 23:54:23,954 - INFO -   Benchmark 09:20 | CE:116.35 PE:115.90 Spot≈25250.0
+2026-04-12 23:54:23,955 - INFO -   SELL C @ 141.25 | CE+21.4% PE+-10.7% | Target≤91.81 | SL≥197.75 | 09:50
+2026-04-12 23:54:23,955 - INFO -   BUY BACK @ 118.75 | PnL: 29,250 | Time Exit (11:30)
+2026-04-12 23:54:23,955 - INFO - --- 2025-07-01 ---
+2026-04-12 23:54:23,958 - INFO -   Benchmark 09:20 | CE:121.35 PE:120.70 Spot≈25550.0
+2026-04-12 23:54:23,958 - INFO - --- 2025-07-08 ---
+2026-04-12 23:54:23,961 - INFO -   Benchmark 09:20 | CE:100.20 PE:109.15 Spot≈25500.0
+2026-04-12 23:54:23,961 - INFO - --- 2025-07-15 ---
+2026-04-12 23:54:23,965 - INFO -   Benchmark 09:20 | CE:101.20 PE:81.65 Spot≈25150.0
+2026-04-12 23:54:23,965 - INFO - --- 2025-07-22 ---
+2026-04-12 23:54:23,968 - INFO -   Benchmark 09:20 | CE:82.40 PE:82.85 Spot≈25150.0
+2026-04-12 23:54:23,968 - INFO -   SELL C @ 99.75 | CE+21.1% PE+-20.8% | Target≤64.84 | SL≥139.65 | 09:45
+2026-04-12 23:54:23,968 - INFO -   BUY BACK @ 92.00 | PnL: 10,075 | Time Exit (11:30)
+2026-04-12 23:54:23,968 - INFO - --- 2025-07-29 ---
+2026-04-12 23:54:23,972 - INFO -   Benchmark 09:20 | CE:120.00 PE:85.40 Spot≈24650.0
+2026-04-12 23:54:23,972 - INFO - --- 2025-08-05 ---
+2026-04-12 23:54:23,975 - INFO -   Benchmark 09:20 | CE:97.15 PE:115.20 Spot≈24700.0
+2026-04-12 23:54:23,975 - INFO -   SELL C @ 121.55 | CE+25.1% PE+-12.0% | Target≤79.01 | SL≥170.17 | 09:45
+2026-04-12 23:54:23,975 - INFO -   BUY BACK @ 114.50 | PnL: 9,165 | Time Exit (11:30)
+2026-04-12 23:54:23,975 - INFO - --- 2025-08-12 ---
+2026-04-12 23:54:23,979 - INFO -   Benchmark 09:20 | CE:105.30 PE:86.35 Spot≈24600.0
+2026-04-12 23:54:23,979 - INFO - --- 2025-08-19 ---
+2026-04-12 23:54:23,983 - INFO -   Benchmark 09:20 | CE:90.70 PE:98.85 Spot≈24950.0
+2026-04-12 23:54:23,983 - INFO -   SELL C @ 110.15 | CE+21.4% PE+-32.6% | Target≤71.60 | SL≥154.21 | 10:10
+2026-04-12 23:54:23,983 - INFO -   BUY BACK @ 85.80 | PnL: 31,655 | Time Exit (11:30)
+2026-04-12 23:54:23,983 - INFO - --- 2025-08-26 ---
+2026-04-12 23:54:23,986 - INFO -   Benchmark 09:20 | CE:86.30 PE:75.50 Spot≈24800.0
+2026-04-12 23:54:23,986 - INFO - --- 2025-09-02 ---
+2026-04-12 23:54:23,989 - INFO -   Benchmark 09:20 | CE:40.70 PE:42.65 Spot≈24650.0
+2026-04-12 23:54:23,990 - INFO -   SELL C @ 51.55 | CE+26.7% PE+-36.0% | Target≤33.51 | SL≥72.17 | 09:50
+2026-04-12 23:54:23,990 - INFO -   BUY BACK @ 32.90 | PnL: 24,245 | Target Hit
+2026-04-12 23:54:23,990 - INFO - --- 2025-09-09 ---
+2026-04-12 23:54:23,993 - INFO -   Benchmark 09:20 | CE:47.85 PE:43.20 Spot≈24850.0
+2026-04-12 23:54:23,993 - INFO -   SELL C @ 59.20 | CE+23.7% PE+-24.4% | Target≤38.48 | SL≥82.88 | 10:10
+2026-04-12 23:54:23,993 - INFO -   BUY BACK @ 33.75 | PnL: 33,085 | Target Hit
+2026-04-12 23:54:23,993 - INFO - --- 2025-09-16 ---
+2026-04-12 23:54:23,996 - INFO -   Benchmark 09:20 | CE:47.90 PE:31.95 Spot≈25100.0
+2026-04-12 23:54:23,996 - INFO -   SELL P @ 48.50 | CE+-43.7% PE+51.8% | Target≤31.53 | SL≥67.90 | 09:30
+2026-04-12 23:54:23,996 - INFO -   BUY BACK @ 28.80 | PnL: 25,610 | Target Hit
+2026-04-12 23:54:23,996 - INFO - --- 2025-09-23 ---
+2026-04-12 23:54:23,999 - INFO -   Benchmark 09:20 | CE:49.00 PE:29.15 Spot≈25200.0
+2026-04-12 23:54:23,999 - INFO -   SELL C @ 59.10 | CE+20.6% PE+-6.3% | Target≤38.41 | SL≥82.74 | 09:35
+2026-04-12 23:54:23,999 - INFO -   BUY BACK @ 37.35 | PnL: 28,275 | Target Hit
+2026-04-12 23:54:23,999 - INFO - --- 2025-09-30 ---
+2026-04-12 23:54:24,002 - INFO -   Benchmark 09:20 | CE:59.95 PE:44.80 Spot≈24700.0
+2026-04-12 23:54:24,002 - INFO -   SELL P @ 61.00 | CE+-24.4% PE+36.2% | Target≤39.65 | SL≥85.40 | 09:30
+2026-04-12 23:54:24,002 - INFO -   BUY BACK @ 35.35 | PnL: 33,345 | Target Hit
+2026-04-12 23:54:24,002 - INFO - --- 2025-10-07 ---
+2026-04-12 23:54:24,005 - INFO -   Benchmark 09:20 | CE:51.20 PE:39.70 Spot≈25100.0
+2026-04-12 23:54:24,006 - INFO -   SELL P @ 48.50 | CE+-21.4% PE+22.2% | Target≤31.53 | SL≥67.90 | 09:50
+2026-04-12 23:54:24,006 - INFO -   BUY BACK @ 27.15 | PnL: 27,755 | Target Hit
+2026-04-12 23:54:24,006 - INFO - --- 2025-10-14 ---
+2026-04-12 23:54:24,009 - INFO -   Benchmark 09:20 | CE:54.00 PE:41.25 Spot≈25300.0
+2026-04-12 23:54:24,009 - INFO -   SELL P @ 51.40 | CE+0.5% PE+24.6% | Target≤33.41 | SL≥71.96 | 09:40
+2026-04-12 23:54:24,009 - INFO -   BUY BACK @ 33.05 | PnL: 23,855 | Target Hit
+2026-04-12 23:54:24,009 - INFO - --- 2025-10-21 ---
+2026-04-12 23:54:24,012 - WARNING -   No 09:20 bar for 2025-10-21
+2026-04-12 23:54:24,012 - INFO - --- 2025-10-28 ---
+2026-04-12 23:54:24,015 - INFO -   Benchmark 09:20 | CE:88.75 PE:48.00 Spot≈25950.0
+2026-04-12 23:54:24,015 - INFO -   SELL P @ 63.25 | CE+-24.7% PE+31.8% | Target≤41.11 | SL≥88.55 | 09:30
+2026-04-12 23:54:24,015 - INFO -   BUY BACK @ 36.55 | PnL: 34,710 | Target Hit
+2026-04-12 23:54:24,015 - INFO - --- 2025-11-04 ---
+2026-04-12 23:54:24,018 - INFO -   Benchmark 09:20 | CE:55.75 PE:55.65 Spot≈25750.0
+2026-04-12 23:54:24,018 - INFO - --- 2025-11-11 ---
+2026-04-12 23:54:24,022 - INFO -   Benchmark 09:20 | CE:50.95 PE:62.25 Spot≈25550.0
+2026-04-12 23:54:24,022 - INFO -   SELL C @ 61.30 | CE+20.3% PE+-29.2% | Target≤39.84 | SL≥85.82 | 09:30
+2026-04-12 23:54:24,022 - INFO -   BUY BACK @ 31.65 | PnL: 38,545 | Target Hit
+2026-04-12 23:54:24,022 - INFO - --- 2025-11-18 ---
+2026-04-12 23:54:24,025 - INFO -   Benchmark 09:20 | CE:55.60 PE:55.35 Spot≈25950.0
+2026-04-12 23:54:24,025 - INFO -   SELL P @ 69.30 | CE+-31.3% PE+25.2% | Target≤45.05 | SL≥97.02 | 09:45
+2026-04-12 23:54:24,025 - INFO -   BUY BACK @ 43.75 | PnL: 33,215 | Target Hit
+2026-04-12 23:54:24,025 - INFO - --- 2025-11-25 ---
+2026-04-12 23:54:24,028 - INFO -   Benchmark 09:20 | CE:59.15 PE:50.90 Spot≈25950.0
+2026-04-12 23:54:24,028 - INFO -   SELL P @ 63.20 | CE+-24.3% PE+24.2% | Target≤41.08 | SL≥88.48 | 09:30
+2026-04-12 23:54:24,028 - INFO -   BUY BACK @ 38.15 | PnL: 32,565 | Target Hit
+2026-04-12 23:54:24,028 - INFO - --- 2025-12-02 ---
+2026-04-12 23:54:24,031 - INFO -   Benchmark 09:20 | CE:53.40 PE:49.05 Spot≈26150.0
+2026-04-12 23:54:24,031 - INFO -   SELL C @ 67.05 | CE+25.6% PE+-27.0% | Target≤43.58 | SL≥93.87 | 09:45
+2026-04-12 23:54:24,031 - INFO -   BUY BACK @ 41.90 | PnL: 32,695 | Target Hit
+2026-04-12 23:54:24,031 - INFO - --- 2025-12-09 ---
+2026-04-12 23:54:24,035 - INFO -   Benchmark 09:20 | CE:46.65 PE:63.95 Spot≈25850.0
+2026-04-12 23:54:24,035 - INFO -   SELL C @ 74.40 | CE+59.5% PE+-37.5% | Target≤48.36 | SL≥104.16 | 09:30
+2026-04-12 23:54:24,035 - INFO -   BUY BACK @ 46.65 | PnL: 36,075 | Target Hit
+2026-04-12 23:54:24,035 - INFO - --- 2025-12-16 ---
+2026-04-12 23:54:24,038 - INFO -   Benchmark 09:20 | CE:37.60 PE:62.90 Spot≈25950.0
+2026-04-12 23:54:24,038 - INFO -   SELL C @ 60.05 | CE+59.7% PE+-40.2% | Target≤39.03 | SL≥84.07 | 09:30
+2026-04-12 23:54:24,038 - INFO -   BUY BACK @ 35.90 | PnL: 31,395 | Target Hit
+2026-04-12 23:54:24,038 - INFO - --- 2025-12-23 ---
+2026-04-12 23:54:24,041 - INFO -   Benchmark 09:20 | CE:42.45 PE:47.35 Spot≈26150.0
+2026-04-12 23:54:24,041 - INFO -   SELL C @ 52.40 | CE+23.4% PE+-32.3% | Target≤34.06 | SL≥73.36 | 09:40
+2026-04-12 23:54:24,042 - INFO -   BUY BACK @ 32.55 | PnL: 25,805 | Target Hit
+2026-04-12 23:54:24,042 - INFO - --- 2025-12-30 ---
+2026-04-12 23:54:24,045 - INFO -   Benchmark 09:20 | CE:30.85 PE:44.30 Spot≈25900.0
+2026-04-12 23:54:24,045 - INFO -   SELL C @ 44.65 | CE+44.7% PE+-28.0% | Target≤29.02 | SL≥62.51 | 09:30
+2026-04-12 23:54:24,045 - INFO -   BUY BACK @ 22.00 | PnL: 29,445 | Target Hit
+2026-04-12 23:54:24,045 - INFO - --- 2026-01-06 ---
+2026-04-12 23:54:24,048 - INFO -   Benchmark 09:20 | CE:45.00 PE:40.00 Spot≈26200.0
+2026-04-12 23:54:24,048 - INFO -   SELL P @ 52.40 | CE+-33.1% PE+31.0% | Target≤34.06 | SL≥73.36 | 09:45
+2026-04-12 23:54:24,048 - INFO -   BUY BACK @ 34.00 | PnL: 23,920 | Target Hit
+2026-04-12 23:54:24,048 - INFO - --- 2026-01-13 ---
+2026-04-12 23:54:24,051 - INFO -   Benchmark 09:20 | CE:51.05 PE:66.35 Spot≈25850.0
+2026-04-12 23:54:24,051 - INFO -   SELL C @ 62.05 | CE+21.5% PE+4.1% | Target≤40.33 | SL≥86.87 | 09:30
+2026-04-12 23:54:24,051 - INFO -   BUY BACK @ 38.75 | PnL: 30,290 | Target Hit
+2026-04-12 23:54:24,051 - INFO - --- 2026-01-20 ---
+2026-04-12 23:54:24,054 - INFO -   Benchmark 09:20 | CE:65.60 PE:50.05 Spot≈25500.0
+2026-04-12 23:54:24,054 - INFO -   SELL P @ 62.85 | CE+-15.7% PE+25.6% | Target≤40.85 | SL≥87.99 | 09:30
+2026-04-12 23:54:24,055 - INFO -   BUY BACK @ 37.80 | PnL: 32,565 | Target Hit
+2026-04-12 23:54:24,055 - INFO - --- 2026-01-27 ---
+2026-04-12 23:54:24,058 - INFO -   Benchmark 09:20 | CE:108.95 PE:91.00 Spot≈24950.0
+2026-04-12 23:54:24,058 - INFO - --- 2026-02-03 ---
+2026-04-12 23:54:24,061 - INFO -   Benchmark 09:20 | CE:148.50 PE:138.65 Spot≈25800.0
+2026-04-12 23:54:24,061 - INFO - --- 2026-02-10 ---
+2026-04-12 23:54:24,064 - INFO -   Benchmark 09:20 | CE:56.15 PE:39.60 Spot≈25900.0
+2026-04-12 23:54:24,064 - INFO -   SELL P @ 49.75 | CE+-21.4% PE+25.6% | Target≤32.34 | SL≥69.65 | 09:30
+2026-04-12 23:54:24,064 - INFO -   BUY BACK @ 31.10 | PnL: 24,245 | Target Hit
+2026-04-12 23:54:24,064 - INFO - --- 2026-02-17 ---
+2026-04-12 23:54:24,067 - INFO -   Benchmark 09:20 | CE:38.25 PE:67.85 Spot≈25600.0
+2026-04-12 23:54:24,067 - INFO -   SELL C @ 50.35 | CE+31.6% PE+-30.7% | Target≤32.73 | SL≥70.49 | 09:30
+2026-04-12 23:54:24,067 - INFO -   BUY BACK @ 53.95 | PnL: -4,680 | Time Exit (11:30)
+2026-04-12 23:54:24,067 - INFO - --- 2026-02-24 ---
+2026-04-12 23:54:24,071 - INFO -   Benchmark 09:20 | CE:65.40 PE:58.45 Spot≈25550.0
+2026-04-12 23:54:24,071 - INFO -   SELL P @ 77.15 | CE+-20.8% PE+32.0% | Target≤50.15 | SL≥108.01 | 09:45
+2026-04-12 23:54:24,071 - INFO -   BUY BACK @ 49.55 | PnL: 35,880 | Target Hit
+2026-04-12 23:54:24,071 - INFO - --- 2026-03-03 ---
+2026-04-12 23:54:24,695 - WARNING -   No data for 2026-03-03
+2026-04-12 23:54:24,696 - INFO - --- 2026-03-10 ---
+2026-04-12 23:54:24,704 - INFO -   Benchmark 09:20 | CE:89.70 PE:87.00 Spot≈24150.0
+2026-04-12 23:54:24,704 - INFO - --- 2026-03-17 ---
+2026-04-12 23:54:24,712 - INFO -   Benchmark 09:20 | CE:85.95 PE:80.80 Spot≈23350.0
+2026-04-12 23:54:24,712 - INFO - --- 2026-03-24 ---
+2026-04-12 23:54:24,718 - INFO -   Benchmark 09:20 | CE:118.40 PE:101.30 Spot≈22800.0
+2026-04-12 23:54:24,718 - INFO - --- 2026-03-31 ---
+2026-04-12 23:54:25,343 - WARNING -   No data for 2026-03-31
+2026-04-12 23:54:25,344 - INFO - --- 2026-04-07 ---
+2026-04-12 23:54:25,352 - INFO -   Benchmark 09:20 | CE:97.20 PE:107.45 Spot≈22800.0
+2026-04-12 23:54:25,365 - INFO - Gamma Blast backtest completed: 27 trades
+2026-04-12 23:54:26,029 - INFO - Connected to Salesforce
+2026-04-12 23:54:26,608 - INFO - Resolved Strategy__c Id: gamma_blast → a1hGA000007M0QIYA0
+2026-04-12 23:54:28,401 - INFO - -> SF SYNC: 27 trade rows saved to historical_backtests__c (0 failed).
+2026-04-12 23:54:28,404 - INFO - 127.0.0.1 - - [12/Apr/2026 23:54:28] "POST /api/test-strategy HTTP/1.1" 200 -
+2026-04-12 23:54:30,678 - INFO - 127.0.0.1 - - [12/Apr/2026 23:54:30] "GET /api/backtests HTTP/1.1" 200 -

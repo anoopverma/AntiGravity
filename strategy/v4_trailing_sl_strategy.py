@@ -17,9 +17,7 @@ ACCESS_TOKEN = os.getenv("DHAN_ACCESS_TOKEN")
 
 class NiftyV4TrailingSLStrategy:
     def __init__(self, target_expiry):
-        from dhanhq.dhan_context import DhanContext
-        context = DhanContext(str(CLIENT_ID), str(ACCESS_TOKEN))
-        self.dhan = dhanhq(context)
+        self.dhan = dhanhq(str(CLIENT_ID), str(ACCESS_TOKEN))
         self.target_expiry = target_expiry
         self.lot_size = 65
         self.running = False
@@ -388,7 +386,7 @@ class NiftyV4TrailingSLStrategy:
             except Exception as e:
                 logger.error(f"LIVE Order Exit Failed: {e}")
 
-        # Save to PostgreSQL
+        # Save to PostgreSQL (paper = Forward Test, live = Live Trade)
         try:
             import pandas as pd
             from sqlalchemy import create_engine

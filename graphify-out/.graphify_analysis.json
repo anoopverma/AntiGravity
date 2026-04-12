@@ -1,0 +1,485 @@
+{
+  "communities": {
+    "0": [
+      "app_backtest",
+      "app_build_expiry_calendar",
+      "app_clear_logs",
+      "app_close_all_positions",
+      "app_delete_backtest",
+      "app_expiries_page",
+      "app_get_backtests",
+      "app_get_expiries",
+      "app_get_expiries_all",
+      "app_get_expiries_history",
+      "app_get_expiry_strategy_stats",
+      "app_get_positions",
+      "app_get_status",
+      "app_get_strategy_backtest",
+      "app_get_strategy_performance",
+      "app_get_system_logs",
+      "app_health",
+      "app_index",
+      "app_init_dhan",
+      "app_login_page",
+      "app_login_required",
+      "app_logout",
+      "app_pause",
+      "app_py",
+      "app_rationale_1029",
+      "app_rationale_1106",
+      "app_rationale_231",
+      "app_rationale_256",
+      "app_rationale_267",
+      "app_rationale_54",
+      "app_rationale_743",
+      "app_rationale_810",
+      "app_rationale_882",
+      "app_rationale_97",
+      "app_rationale_973",
+      "app_resume",
+      "app_run_backtest",
+      "app_start",
+      "app_stop_bot",
+      "app_strategy_loop",
+      "app_test_strategy",
+      "expiry_manager_expirymanager",
+      "expiry_manager_expirymanager_init",
+      "expiry_manager_rationale_239",
+      "strategy_v4_trailing_sl_strategy_py",
+      "v4_trailing_sl_strategy_niftyv4trailingslstrategy",
+      "v4_trailing_sl_strategy_niftyv4trailingslstrategy_init"
+    ],
+    "1": [
+      "backtest_gamma_gammaspikebacktester",
+      "backtest_gamma_gammaspikebacktester_init",
+      "backtest_gamma_gammaspikebacktester_print_summary",
+      "backtest_gamma_gammaspikebacktester_run",
+      "backtest_gamma_gammaspikebacktester_save_to_salesforce",
+      "backtest_gamma_get_last_n_nifty_expiries",
+      "backtest_gamma_py",
+      "backtest_gamma_rationale_1",
+      "backtest_orchestrator_backtestorchestrator",
+      "backtest_orchestrator_backtestorchestrator_connect_salesforce",
+      "backtest_orchestrator_backtestorchestrator_init",
+      "backtest_orchestrator_backtestorchestrator_run_and_sync",
+      "backtest_orchestrator_backtestorchestrator_run_gamma_blast",
+      "backtest_orchestrator_backtestorchestrator_run_strategy",
+      "backtest_orchestrator_backtestorchestrator_run_v4_gamma",
+      "backtest_orchestrator_backtestorchestrator_sync_to_salesforce",
+      "backtest_orchestrator_py",
+      "backtest_orchestrator_rationale_1",
+      "backtest_orchestrator_rationale_123",
+      "backtest_orchestrator_rationale_210",
+      "backtest_orchestrator_rationale_28",
+      "backtest_orchestrator_rationale_36",
+      "backtest_orchestrator_rationale_54",
+      "backtest_orchestrator_rationale_77",
+      "backtest_orchestrator_rationale_95",
+      "backtest_v4_optionfetcher",
+      "backtest_v4_optionfetcher_fetch",
+      "backtest_v4_optionfetcher_init",
+      "backtest_v4_py",
+      "backtest_v4_rationale_102",
+      "backtest_v4_rationale_117",
+      "backtest_v4_v4backtester",
+      "backtest_v4_v4backtester_fetch_dhan_5min_data",
+      "backtest_v4_v4backtester_fetch_yf_5min_fallback",
+      "backtest_v4_v4backtester_get_last_n_nifty_expiries",
+      "backtest_v4_v4backtester_get_real_option_price",
+      "backtest_v4_v4backtester_init",
+      "backtest_v4_v4backtester_print_summary",
+      "backtest_v4_v4backtester_run_v4_backtest",
+      "backtest_v4_v4backtester_save_to_postgres"
+    ],
+    "2": [
+      "enum",
+      "expiry_manager_backfill_to_trading_day",
+      "expiry_manager_expiryfetcherbase",
+      "expiry_manager_expirymanager_fetcher_for",
+      "expiry_manager_expirymanager_get_upcoming_expiries",
+      "expiry_manager_expirymanager_to_json",
+      "expiry_manager_expiryrecord",
+      "expiry_manager_expiryrecord_to_dict",
+      "expiry_manager_expirytype",
+      "expiry_manager_is_trading_day",
+      "expiry_manager_last_weekday_of_month",
+      "expiry_manager_monthlylastweekdayfetcher",
+      "expiry_manager_monthlylastweekdayfetcher_init",
+      "expiry_manager_monthlylastweekdayfetcher_resolve_expiry",
+      "expiry_manager_rationale_1",
+      "expiry_manager_rationale_114",
+      "expiry_manager_rationale_138",
+      "expiry_manager_rationale_150",
+      "expiry_manager_rationale_178",
+      "expiry_manager_rationale_219",
+      "expiry_manager_rationale_260",
+      "expiry_manager_rationale_274",
+      "expiry_manager_rationale_50",
+      "expiry_manager_rationale_60",
+      "expiry_manager_rationale_93",
+      "expiry_manager_resolve_expiry",
+      "expiry_manager_scriptconfig",
+      "expiry_manager_weekdayfallbackfetcher",
+      "expiry_manager_weekdayfallbackfetcher_resolve_expiry",
+      "expiry_manager_weeklybackfillfetcher",
+      "expiry_manager_weeklybackfillfetcher_init",
+      "expiry_manager_weeklybackfillfetcher_resolve_expiry",
+      "strategy_expiry_manager_py"
+    ],
+    "3": [
+      "backtest_dhan_5min_niftytuesdaydhanbacktester",
+      "backtest_dhan_5min_niftytuesdaydhanbacktester_calculate_adx",
+      "backtest_dhan_5min_niftytuesdaydhanbacktester_calculate_rsi",
+      "backtest_dhan_5min_niftytuesdaydhanbacktester_calculate_supertrend",
+      "backtest_dhan_5min_niftytuesdaydhanbacktester_estimate_option_price",
+      "backtest_dhan_5min_niftytuesdaydhanbacktester_fetch_dhan_5min_data",
+      "backtest_dhan_5min_niftytuesdaydhanbacktester_fetch_yf_5min_fallback",
+      "backtest_dhan_5min_niftytuesdaydhanbacktester_get_last_n_tuesdays",
+      "backtest_dhan_5min_niftytuesdaydhanbacktester_init",
+      "backtest_dhan_5min_niftytuesdaydhanbacktester_print_summary_gamma_blast",
+      "backtest_dhan_5min_niftytuesdaydhanbacktester_print_summary_v4",
+      "backtest_dhan_5min_niftytuesdaydhanbacktester_print_summary_v5",
+      "backtest_dhan_5min_niftytuesdaydhanbacktester_run_gamma_blast_backtest",
+      "backtest_dhan_5min_niftytuesdaydhanbacktester_run_v4_backtest",
+      "backtest_dhan_5min_niftytuesdaydhanbacktester_run_v5_backtest",
+      "backtest_dhan_5min_niftytuesdaydhanbacktester_save_to_postgres",
+      "backtest_dhan_5min_py",
+      "backtest_dhan_5min_rationale_127",
+      "backtest_dhan_5min_rationale_152",
+      "backtest_dhan_5min_rationale_198",
+      "backtest_dhan_5min_rationale_355",
+      "backtest_dhan_5min_rationale_51",
+      "backtest_dhan_5min_rationale_538",
+      "backtest_dhan_5min_rationale_65",
+      "backtest_dhan_5min_rationale_79",
+      "backtest_dhan_5min_rationale_95"
+    ],
+    "4": [
+      "gamma_spike_strategy_main",
+      "gamma_spike_strategy_niftygammaspikestrategy",
+      "gamma_spike_strategy_niftygammaspikestrategy_capture_benchmark",
+      "gamma_spike_strategy_niftygammaspikestrategy_check_entry",
+      "gamma_spike_strategy_niftygammaspikestrategy_close_position",
+      "gamma_spike_strategy_niftygammaspikestrategy_close_with_market",
+      "gamma_spike_strategy_niftygammaspikestrategy_get_live_data",
+      "gamma_spike_strategy_niftygammaspikestrategy_get_net_qty_from_broker",
+      "gamma_spike_strategy_niftygammaspikestrategy_init",
+      "gamma_spike_strategy_niftygammaspikestrategy_manage_position",
+      "gamma_spike_strategy_niftygammaspikestrategy_place_sell_order",
+      "gamma_spike_strategy_niftygammaspikestrategy_run_iteration",
+      "gamma_spike_strategy_rationale_119",
+      "gamma_spike_strategy_rationale_144",
+      "gamma_spike_strategy_rationale_15",
+      "gamma_spike_strategy_rationale_202",
+      "gamma_spike_strategy_rationale_253",
+      "gamma_spike_strategy_rationale_288",
+      "gamma_spike_strategy_rationale_351",
+      "gamma_spike_strategy_rationale_361",
+      "gamma_spike_strategy_rationale_373",
+      "gamma_spike_strategy_rationale_468",
+      "gamma_spike_strategy_rationale_66",
+      "strategy_gamma_spike_strategy_py"
+    ],
+    "5": [
+      "pg_to_salesforce_build_deployment_zip",
+      "pg_to_salesforce_build_object_xml",
+      "pg_to_salesforce_build_package_xml",
+      "pg_to_salesforce_build_permissionset_xml",
+      "pg_to_salesforce_collect_schema",
+      "pg_to_salesforce_deploy_and_wait",
+      "pg_to_salesforce_ensure_permissionset_assigned",
+      "pg_to_salesforce_main",
+      "pg_to_salesforce_migrate_data",
+      "pg_to_salesforce_pg_col_to_sf",
+      "pg_to_salesforce_py",
+      "pg_to_salesforce_rationale_171",
+      "pg_to_salesforce_rationale_218",
+      "pg_to_salesforce_rationale_236",
+      "pg_to_salesforce_rationale_296",
+      "pg_to_salesforce_rationale_376",
+      "pg_to_salesforce_rationale_451",
+      "pg_to_salesforce_rationale_518",
+      "pg_to_salesforce_rationale_554",
+      "pg_to_salesforce_rationale_626",
+      "pg_to_salesforce_rationale_668",
+      "pg_to_salesforce_to_api_name",
+      "pg_to_salesforce_to_label"
+    ],
+    "6": [
+      "v4_trailing_sl_strategy_niftyv4trailingslstrategy_capture_benchmark",
+      "v4_trailing_sl_strategy_niftyv4trailingslstrategy_check_entry",
+      "v4_trailing_sl_strategy_niftyv4trailingslstrategy_close_position",
+      "v4_trailing_sl_strategy_niftyv4trailingslstrategy_get_live_data",
+      "v4_trailing_sl_strategy_niftyv4trailingslstrategy_get_net_qty_from_broker",
+      "v4_trailing_sl_strategy_niftyv4trailingslstrategy_manage_position",
+      "v4_trailing_sl_strategy_niftyv4trailingslstrategy_place_order",
+      "v4_trailing_sl_strategy_niftyv4trailingslstrategy_run_iteration",
+      "v4_trailing_sl_strategy_rationale_103",
+      "v4_trailing_sl_strategy_rationale_148",
+      "v4_trailing_sl_strategy_rationale_198",
+      "v4_trailing_sl_strategy_rationale_268",
+      "v4_trailing_sl_strategy_rationale_330",
+      "v4_trailing_sl_strategy_rationale_342",
+      "v4_trailing_sl_strategy_rationale_55",
+      "v4_trailing_sl_strategy_rationale_88"
+    ],
+    "7": [
+      "nse_expiry_fetcher_fetch_expiry_dates",
+      "nse_expiry_fetcher_nearest_upcoming",
+      "nse_expiry_fetcher_nseexpiryfetcher",
+      "nse_expiry_fetcher_nseexpiryfetcher_get_next_expiry",
+      "nse_expiry_fetcher_nseexpiryfetcher_init",
+      "nse_expiry_fetcher_nsesessionbase",
+      "nse_expiry_fetcher_playwrightnsesession",
+      "nse_expiry_fetcher_playwrightnsesession_fetch_expiry_dates",
+      "nse_expiry_fetcher_playwrightnsesession_init",
+      "nse_expiry_fetcher_rationale_1",
+      "nse_expiry_fetcher_rationale_103",
+      "nse_expiry_fetcher_rationale_123",
+      "nse_expiry_fetcher_rationale_138",
+      "nse_expiry_fetcher_rationale_47",
+      "strategy_nse_expiry_fetcher_py"
+    ],
+    "8": [
+      "expiry_repository_expiryrepositorybase",
+      "expiry_repository_fetch_latest",
+      "expiry_repository_postgresexpiryrepository",
+      "expiry_repository_postgresexpiryrepository_ensure_table",
+      "expiry_repository_postgresexpiryrepository_fetch_latest",
+      "expiry_repository_postgresexpiryrepository_init",
+      "expiry_repository_postgresexpiryrepository_upsert",
+      "expiry_repository_rationale_1",
+      "expiry_repository_rationale_129",
+      "expiry_repository_rationale_79",
+      "expiry_repository_rationale_86",
+      "expiry_repository_rationale_98",
+      "expiry_repository_upsert",
+      "strategy_expiry_repository_py"
+    ],
+    "9": [
+      "fix_fls_layout_build_zip",
+      "fix_fls_layout_deploy_zip",
+      "fix_fls_layout_main",
+      "fix_fls_layout_py",
+      "fix_fls_layout_rationale_127",
+      "fix_fls_layout_rationale_52",
+      "fix_fls_layout_xml"
+    ],
+    "10": [
+      "expiry_populator_get_last_weekday_of_month",
+      "expiry_populator_get_previous_trading_day",
+      "expiry_populator_is_trading_holiday",
+      "expiry_populator_populate",
+      "expiry_populator_rationale_1",
+      "strategy_expiry_populator_py"
+    ],
+    "11": [
+      "strategy_whatsapp_alerter_py",
+      "whatsapp_alerter_rationale_9",
+      "whatsapp_alerter_whatsappalerter",
+      "whatsapp_alerter_whatsappalerter_init",
+      "whatsapp_alerter_whatsappalerter_send_alert"
+    ],
+    "12": [
+      "strategy_telegram_alerter_py",
+      "telegram_alerter_rationale_8",
+      "telegram_alerter_telegramalerter",
+      "telegram_alerter_telegramalerter_init",
+      "telegram_alerter_telegramalerter_send_alert"
+    ],
+    "13": [
+      "compare_adx_py",
+      "compare_adx_run_comparison"
+    ],
+    "14": [
+      "test_dhan_py"
+    ],
+    "15": [
+      "clean_db_py"
+    ],
+    "16": [
+      "gunicorn_conf_py"
+    ],
+    "17": [
+      "nse_expiry_fetcher_rationale_38"
+    ],
+    "18": [
+      "strategy_init_py"
+    ],
+    "19": [
+      "expiry_repository_rationale_65"
+    ],
+    "20": [
+      "expiry_repository_rationale_70"
+    ]
+  },
+  "cohesion": {
+    "0": 0.06,
+    "1": 0.09,
+    "2": 0.09,
+    "3": 0.14,
+    "4": 0.13,
+    "5": 0.13,
+    "6": 0.16,
+    "7": 0.17,
+    "8": 0.16,
+    "9": 0.38,
+    "10": 0.53,
+    "11": 0.4,
+    "12": 0.4,
+    "13": 1.0,
+    "14": 1.0,
+    "15": 1.0,
+    "16": 1.0,
+    "17": 1.0,
+    "18": 1.0,
+    "19": 1.0,
+    "20": 1.0
+  },
+  "gods": [
+    {
+      "id": "gamma_spike_strategy_niftygammaspikestrategy",
+      "label": "NiftyGammaSpikeStrategy",
+      "edges": 24
+    },
+    {
+      "id": "backtest_orchestrator_backtestorchestrator",
+      "label": "BacktestOrchestrator",
+      "edges": 22
+    },
+    {
+      "id": "v4_trailing_sl_strategy_niftyv4trailingslstrategy",
+      "label": "NiftyV4TrailingSLStrategy",
+      "edges": 21
+    },
+    {
+      "id": "backtest_v4_v4backtester",
+      "label": "V4Backtester",
+      "edges": 18
+    },
+    {
+      "id": "expiry_manager_expirymanager",
+      "label": "ExpiryManager",
+      "edges": 17
+    },
+    {
+      "id": "backtest_dhan_5min_niftytuesdaydhanbacktester",
+      "label": "NiftyTuesdayDhanBacktester",
+      "edges": 16
+    },
+    {
+      "id": "backtest_gamma_gammaspikebacktester",
+      "label": "GammaSpikeBacktester",
+      "edges": 15
+    },
+    {
+      "id": "expiry_repository_postgresexpiryrepository",
+      "label": "PostgresExpiryRepository",
+      "edges": 7
+    },
+    {
+      "id": "pg_to_salesforce_collect_schema",
+      "label": "_collect_schema()",
+      "edges": 6
+    },
+    {
+      "id": "pg_to_salesforce_build_deployment_zip",
+      "label": "_build_deployment_zip()",
+      "edges": 6
+    }
+  ],
+  "surprises": [
+    {
+      "source": "Init Dhan client using DHAN_ACCESS_TOKEN from env (Local .env or Render Env Vari",
+      "target": "BacktestOrchestrator",
+      "source_files": [
+        "app.py",
+        "backtest_orchestrator.py"
+      ],
+      "confidence": "INFERRED",
+      "relation": "uses",
+      "why": "inferred connection - not explicitly stated in source; connects across different repos/directories; bridges separate communities"
+    },
+    {
+      "source": "Background thread that drives active strategies.",
+      "target": "BacktestOrchestrator",
+      "source_files": [
+        "app.py",
+        "backtest_orchestrator.py"
+      ],
+      "confidence": "INFERRED",
+      "relation": "uses",
+      "why": "inferred connection - not explicitly stated in source; connects across different repos/directories; bridges separate communities"
+    },
+    {
+      "source": "Build a forward expiry calendar without database persistence.",
+      "target": "BacktestOrchestrator",
+      "source_files": [
+        "app.py",
+        "backtest_orchestrator.py"
+      ],
+      "confidence": "INFERRED",
+      "relation": "uses",
+      "why": "inferred connection - not explicitly stated in source; connects across different repos/directories; bridges separate communities"
+    },
+    {
+      "source": "Backward-compatible endpoint returning generated expiry calendar.",
+      "target": "BacktestOrchestrator",
+      "source_files": [
+        "app.py",
+        "backtest_orchestrator.py"
+      ],
+      "confidence": "INFERRED",
+      "relation": "uses",
+      "why": "inferred connection - not explicitly stated in source; connects across different repos/directories; bridges separate communities"
+    },
+    {
+      "source": "Return all upcoming expiry records for the next few months.",
+      "target": "BacktestOrchestrator",
+      "source_files": [
+        "app.py",
+        "backtest_orchestrator.py"
+      ],
+      "confidence": "INFERRED",
+      "relation": "uses",
+      "why": "inferred connection - not explicitly stated in source; connects across different repos/directories; bridges separate communities"
+    }
+  ],
+  "questions": [
+    {
+      "type": "bridge_node",
+      "question": "Why does `BacktestOrchestrator` connect `Community 1` to `Community 0`?",
+      "why": "High betweenness centrality (0.135) - this node is a cross-community bridge."
+    },
+    {
+      "type": "bridge_node",
+      "question": "Why does `ExpiryManager` connect `Community 0` to `Community 2`?",
+      "why": "High betweenness centrality (0.126) - this node is a cross-community bridge."
+    },
+    {
+      "type": "bridge_node",
+      "question": "Why does `NiftyGammaSpikeStrategy` connect `Community 4` to `Community 0`?",
+      "why": "High betweenness centrality (0.092) - this node is a cross-community bridge."
+    },
+    {
+      "type": "verify_inferred",
+      "question": "Are the 11 inferred relationships involving `NiftyGammaSpikeStrategy` (e.g. with `Init Dhan client using DHAN_ACCESS_TOKEN from env (Local .env or Render Env Vari` and `Background thread that drives active strategies.`) actually correct?",
+      "why": "`NiftyGammaSpikeStrategy` has 11 INFERRED edges - model-reasoned connections that need verification."
+    },
+    {
+      "type": "verify_inferred",
+      "question": "Are the 13 inferred relationships involving `BacktestOrchestrator` (e.g. with `GammaSpikeBacktester` and `V4Backtester`) actually correct?",
+      "why": "`BacktestOrchestrator` has 13 INFERRED edges - model-reasoned connections that need verification."
+    },
+    {
+      "type": "verify_inferred",
+      "question": "Are the 11 inferred relationships involving `NiftyV4TrailingSLStrategy` (e.g. with `Init Dhan client using DHAN_ACCESS_TOKEN from env (Local .env or Render Env Vari` and `Background thread that drives active strategies.`) actually correct?",
+      "why": "`NiftyV4TrailingSLStrategy` has 11 INFERRED edges - model-reasoned connections that need verification."
+    },
+    {
+      "type": "verify_inferred",
+      "question": "Are the 9 inferred relationships involving `V4Backtester` (e.g. with `BacktestOrchestrator` and `backtest_orchestrator.py \u2014 Unified backtest executor with Salesforce integration`) actually correct?",
+      "why": "`V4Backtester` has 9 INFERRED edges - model-reasoned connections that need verification."
+    }
+  ]
+}

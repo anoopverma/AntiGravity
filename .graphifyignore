@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+graphify-out/
+.git/
+cookies.txt
+server_log.txt
+*.txt
+static/
+templates/
+render.yaml
+Dockerfile
+start.sh

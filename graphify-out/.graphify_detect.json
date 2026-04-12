@@ -1,0 +1,41 @@
+{
+  "files": {
+    "code": [
+      "fix_fls_layout.py",
+      "test_dhan.py",
+      "clean_db.py",
+      "pg_to_salesforce.py",
+      "backtest_orchestrator.py",
+      "backtest_gamma.py",
+      "compare_adx.py",
+      "gunicorn.conf.py",
+      "app.py",
+      "backtest_v4.py",
+      "backtest_dhan_5min.py",
+      "strategy/v4_trailing_sl_strategy.py",
+      "strategy/nse_expiry_fetcher.py",
+      "strategy/gamma_spike_strategy.py",
+      "strategy/expiry_manager.py",
+      "strategy/__init__.py",
+      "strategy/expiry_repository.py",
+      "strategy/whatsapp_alerter.py",
+      "strategy/telegram_alerter.py",
+      "strategy/expiry_populator.py"
+    ],
+    "document": [
+      "CHANGELOG.md",
+      "README.md",
+      "BACKTEST_RUNNER_GUIDE.md",
+      "INTEGRATION_GUIDE.md"
+    ],
+    "paper": [],
+    "image": [],
+    "video": []
+  },
+  "total_files": 24,
+  "total_words": 24081,
+  "needs_graph": false,
+  "warning": "Corpus is ~24,081 words - fits in a single context window. You may not need a graph.",
+  "skipped_sensitive": [],
+  "graphifyignore_patterns": 13
+}

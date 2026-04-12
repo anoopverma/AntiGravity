@@ -3,11 +3,8 @@ import time
 import logging
 import requests
 import pandas as pd
-import numpy as np
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
-from dhanhq import dhanhq
-from scipy.stats import norm
 from sqlalchemy import create_engine
 
 # Configure logging
@@ -71,24 +68,22 @@ class OptionFetcher:
                 time.sleep(0.5)
         return {}
 
-
-# Constants for Black-Scholes Approximation
-RISK_FREE_RATE = 0.1  
-IMPLIED_VOL_ASSUMPTION = 0.15  
-
 class V4Backtester:
     def __init__(self):
         load_dotenv()
-        # Support both standard and Render env var names
+        # client_id kept for backward compatibility and future endpoints
         self.client_id = os.getenv('DHAN_CLIENT_ID') or os.getenv('DHAN_API_KEY')
         self.access_token = os.getenv('DHAN_ACCESS_TOKEN') or os.getenv('DHAN_CLIENT_SECRET')
         
-        if not self.client_id or not self.access_token:
-            raise ValueError("Dhan API credentials (ID/Key or Token/Secret) not found in environment")
-            
-        from dhanhq.dhan_context import DhanContext
-        context = DhanContext(str(self.client_id), str(self.access_token))
-        self.dhan = dhanhq(context)
+        if not self.access_token:
+            raise ValueError("Dhan access token not found in environment (DHAN_ACCESS_TOKEN or DHAN_CLIENT_SECRET)")
+
+        self.intraday_url = "https://api.dhan.co/v2/charts/intraday"
+        self.api_headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "access-token": str(self.access_token),
+        }
         
         # Strategy Parameters
         self.initial_capital = 500000
@@ -159,15 +154,35 @@ class V4Backtester:
         return pd.DataFrame()
 
     def fetch_dhan_5min_data(self, date_str, retries=3):
+        payload = {
+            'securityId': '13',
+            'exchangeSegment': 'IDX_I',
+            'instrument': 'INDEX',
+            'interval': 5,
+            'fromDate': date_str,
+            'toDate': date_str,
+        }
+
         for attempt in range(retries):
             try:
-                req = self.dhan.intraday_minute_data(
-                    security_id='13', exchange_segment=self.dhan.INDEX,
-                    instrument_type='INDEX', from_date=date_str, to_date=date_str
-                )
-                
-                if req.get('status') == 'success' and req.get('data'):
-                    df = pd.DataFrame(req['data'])
+                res = requests.post(self.intraday_url, json=payload, headers=self.api_headers, timeout=30)
+                if res.status_code == 429:
+                    time.sleep(2)
+                    continue
+                res.raise_for_status()
+
+                raw = res.json() or {}
+                candle_data = raw.get('data', raw)
+
+                # Normalize possible response shapes: dict of arrays OR list of dicts.
+                if isinstance(candle_data, dict):
+                    df = pd.DataFrame(candle_data)
+                elif isinstance(candle_data, list):
+                    df = pd.DataFrame(candle_data)
+                else:
+                    df = pd.DataFrame()
+
+                if not df.empty:
                     if df.empty: return pd.DataFrame()
                         
                     time_col = 'timestamp' if 'timestamp' in df.columns else 'start_Time'
@@ -180,14 +195,15 @@ class V4Backtester:
                         
                         df.set_index('datetime', inplace=True)
                         df_5m = df.resample('5min').agg({'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last'}).dropna()
-                        logger.info(f"Fetched {len(df_5m)} 5-min bars for {date_str}")
+                        logger.info(f"Fetched {len(df_5m)} 5-min bars from /charts/intraday for {date_str}")
                         return df_5m
-                elif req.get('remarks') and 'DH-904' in str(req.get('remarks')):
-                    time.sleep(5)
                 else:
+                    logger.warning(f"Empty intraday payload for {date_str}")
                     break
             except Exception as e:
-                break
+                if attempt == retries - 1:
+                    logger.warning(f"Dhan intraday fetch failed for {date_str}: {e}")
+                time.sleep(1)
         return self.fetch_yf_5min_fallback(date_str)
 
     def run_v4_backtest(self, vix_threshold=12.5, target_lock_in=0.20, trailing_step=0.15):
