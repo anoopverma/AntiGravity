@@ -2,12 +2,14 @@ import os
 import time
 import datetime
 import logging
+from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 from dhanhq import dhanhq
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+IST = ZoneInfo("Asia/Kolkata")
 
 load_dotenv()
 
@@ -26,9 +28,7 @@ class NiftyGammaSpikeStrategy:
     """
 
     def __init__(self, client_id, access_token):
-        from dhanhq.dhan_context import DhanContext
-        context = DhanContext(str(client_id), str(access_token))
-        self.dhan = dhanhq(context)
+        self.dhan = dhanhq(str(client_id), str(access_token))
 
         self.target_expiry   = None
         self.index_id        = 13          # Default to Nifty 50
@@ -424,44 +424,58 @@ class NiftyGammaSpikeStrategy:
             except Exception as e:
                 logger.error(f"Live BUY BACK failed: {e}")
 
-        # ── Save to DB ───────────────────────────────────────────────────
+        # ── Save to Salesforce (paper = Forward Test, live = Live Trade) ─────
         try:
-            import pandas as pd
-            from sqlalchemy import create_engine
-            uri = os.getenv("POSTGRES_URI")
-            if uri:
-                engine = create_engine(uri)
-                record = {
-                    'Run_Date':     datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    'Strategy_Name': "v4_gamma_sell",
-                    'Run_Mode':     'Forward Test' if self.paper_trade else 'Live Trade',
-                    'Date':         datetime.datetime.now().strftime("%Y-%m-%d"),
-                    'Entry_Time':   old_pos['time'].strftime("%H:%M:%S"),
-                    'Exit_Time':    datetime.datetime.now().strftime("%H:%M:%S"),
-                    'Option_Type':  'C' if old_pos['type'] == 'CE' else 'P',
-                    'Strike':       f"{old_pos.get('strike','?')}-{self.target_expiry}-{old_pos['type']}",
-                    'Action':       'SELL',
-                    'Qty':          self.lot_size,
-                    'Buy_Price':    round(buy_back_price, 2),
-                    'Peak_Price':   round(entry_sell, 2),
-                    'Sell_Price':   round(entry_sell, 2),
-                    'PNL':          round(pnl, 2),
-                    'ROI%':         round((entry_sell - buy_back_price) / entry_sell * 100, 2) if entry_sell > 0 else 0,
-                    'Capital_ROI%': round((pnl / 500000) * 100, 2),
-                    'Reason':       reason,
-                    'Win':          pnl > 0,
-                    'Parameters':   f"SELL|leg_spike=20%|target=35%|sl=40%|bench=09:20|entry=09:30-11:30"
-                }
-                df = pd.DataFrame([record])
-                try:
-                    existing = pd.read_sql("SELECT * FROM historical_backtests", con=engine)
-                    df = pd.concat([existing, df], ignore_index=True)
-                except Exception:
-                    pass
-                df.to_sql("historical_backtests", con=engine, if_exists='replace', index=False)
-                logger.info(f"✅ Trade saved to DB as v4_gamma_sell ({record['Run_Mode']})")
+            from simple_salesforce import Salesforce
+            from datetime import timezone
+
+            sf = Salesforce(
+                username=os.getenv("SF_USERNAME"),
+                password=os.getenv("SF_PASSWORD"),
+                security_token=os.getenv("SF_SECURITY_TOKEN", ""),
+                domain=os.getenv("SF_DOMAIN", "login"),
+            )
+
+            strategy_sf_id = None
+            try:
+                q = sf.query("SELECT Id FROM Strategy__c WHERE Strategy_Name__c = 'gamma_blast' LIMIT 1")
+                records = q.get("records", [])
+                if records:
+                    strategy_sf_id = records[0].get("Id")
+            except Exception as lookup_exc:
+                logger.warning("Strategy__c lookup failed for gamma_blast: %s", lookup_exc)
+
+            now_ist = datetime.datetime.now(IST)
+            now_utc = now_ist.astimezone(timezone.utc)
+            capital = 500000.0
+            record = {
+                "Run_Date__c": now_utc.strftime("%Y-%m-%dT%H:%M:%S.000Z"),
+                "Strategy_Name__c": "gamma_blast",
+                "Run_Mode__c": "Forward Test" if self.paper_trade else "Live Trade",
+                "Date__c": now_ist.strftime("%Y-%m-%d"),
+                "Entry_Time__c": old_pos["time"].strftime("%H:%M:%S"),
+                "Exit_Time__c": now_ist.strftime("%H:%M:%S"),
+                "Option_Type__c": "C" if old_pos["type"] == "CE" else "P",
+                "Strike__c": f"{old_pos.get('strike', '?')}-{self.target_expiry}-{old_pos['type']}",
+                "Action__c": "SELL",
+                "Qty__c": self.lot_size,
+                "Buy_Price__c": round(buy_back_price, 2),
+                "Peak_Price__c": round(entry_sell, 2),
+                "Sell_Price__c": round(entry_sell, 2),
+                "PNL__c": round(pnl, 2),
+                "ROI__c": round((entry_sell - buy_back_price) / entry_sell * 100, 2) if entry_sell > 0 else 0,
+                "Capital_ROI__c": round((pnl / capital) * 100, 2),
+                "Reason__c": reason,
+                "Win__c": pnl > 0,
+                "Parameters__c": "SELL|leg_spike=20%|target=35%|sl=40%|bench=09:20|entry=09:30-11:30",
+            }
+            if strategy_sf_id:
+                record["Strategy__c"] = strategy_sf_id
+
+            sf.historical_backtests__c.create(record)
+            logger.info("✅ Trade saved to Salesforce as gamma_blast (%s)", record["Run_Mode__c"])
         except Exception as e:
-            logger.error(f"DB save failed: {e}")
+            logger.error("Salesforce save failed: %s", e)
 
 
 def main():
